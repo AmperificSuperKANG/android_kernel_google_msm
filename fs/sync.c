@@ -18,7 +18,16 @@
 #include <linux/backing-dev.h>
 #include <linux/uio.h>
 
+<<<<<<< HEAD
 #define DEBUG 0
+=======
+#ifdef CONFIG_DYNAMIC_FSYNC
+extern bool early_suspend_active;
+#endif
+
+#define VALID_FLAGS (SYNC_FILE_RANGE_WAIT_BEFORE|SYNC_FILE_RANGE_WRITE| \
+			SYNC_FILE_RANGE_WAIT_AFTER)
+>>>>>>> ea1e149... fs/dyn_sync_cntrl: dynamic sync control
 
 #include <linux/sched.h>
 #include <linux/fs.h>
@@ -215,7 +224,11 @@ static void ctx_rcu_free(struct rcu_head *head)
  *	Called when the last user of an aio context has gone away,
  *	and the struct needs to be freed.
  */
+<<<<<<< HEAD
 static void __put_ioctx(struct kioctx *ctx)
+=======
+void sync_filesystems(int wait)
+>>>>>>> ea1e149... fs/dyn_sync_cntrl: dynamic sync control
 {
 	BUG_ON(ctx->reqs_active);
 
@@ -439,6 +452,7 @@ void exit_aio(struct mm_struct *mm)
  */
 static struct kiocb *__aio_get_req(struct kioctx *ctx)
 {
+<<<<<<< HEAD
 	struct kiocb *req = NULL;
 
 	req = kmem_cache_alloc(kiocb_cachep, GFP_KERNEL);
@@ -458,6 +472,19 @@ static struct kiocb *__aio_get_req(struct kioctx *ctx)
 	req->ki_eventfd = NULL;
 
 	return req;
+=======
+#ifdef CONFIG_DYNAMIC_FSYNC
+	if (!early_suspend_active)
+		return 0;
+	else {
+#endif
+	if (!file->f_op || !file->f_op->fsync)
+		return -EINVAL;
+	return file->f_op->fsync(file, start, end, datasync);
+#ifdef CONFIG_DYNAMIC_FSYNC
+	}
+#endif
+>>>>>>> ea1e149... fs/dyn_sync_cntrl: dynamic sync control
 }
 
 /*
@@ -565,6 +592,7 @@ out:
 static inline struct kiocb *aio_get_req(struct kioctx *ctx,
 					struct kiocb_batch *batch)
 {
+<<<<<<< HEAD
 	struct kiocb *req;
 
 	if (list_empty(&batch->head))
@@ -573,10 +601,19 @@ static inline struct kiocb *aio_get_req(struct kioctx *ctx,
 	req = list_first_entry(&batch->head, struct kiocb, ki_batch);
 	list_del(&req->ki_batch);
 	return req;
+=======
+#ifdef CONFIG_DYNAMIC_FSYNC
+	if (!early_suspend_active)
+		return 0;
+	else
+#endif
+	return do_fsync(fd, 0);
+>>>>>>> ea1e149... fs/dyn_sync_cntrl: dynamic sync control
 }
 
 static inline void really_put_req(struct kioctx *ctx, struct kiocb *req)
 {
+<<<<<<< HEAD
 	assert_spin_locked(&ctx->ctx_lock);
 
 	if (req->ki_eventfd != NULL)
@@ -590,6 +627,14 @@ static inline void really_put_req(struct kioctx *ctx, struct kiocb *req)
 
 	if (unlikely(!ctx->reqs_active && ctx->dead))
 		wake_up_all(&ctx->wait);
+=======
+#ifdef CONFIG_DYNAMIC_FSYNC
+	if (!early_suspend_active)
+		return 0;
+	else
+#endif
+	return do_fsync(fd, 1);
+>>>>>>> ea1e149... fs/dyn_sync_cntrl: dynamic sync control
 }
 
 static void aio_fput_routine(struct work_struct *data)
@@ -660,7 +705,16 @@ static int __aio_put_req(struct kioctx *ctx, struct kiocb *req)
  */
 int aio_put_req(struct kiocb *req)
 {
+<<<<<<< HEAD
 	struct kioctx *ctx = req->ki_ctx;
+=======
+#ifdef CONFIG_DYNAMIC_FSYNC
+	if (!early_suspend_active)
+		return 0;
+	else {
+#endif
+
+>>>>>>> ea1e149... fs/dyn_sync_cntrl: dynamic sync control
 	int ret;
 	spin_lock_irq(&ctx->ctx_lock);
 	ret = __aio_put_req(ctx, req);
@@ -832,6 +886,9 @@ out:
 		}
 	}
 	return ret;
+#ifdef CONFIG_DYNAMIC_FSYNC
+	}
+#endif
 }
 
 /*
@@ -889,10 +946,19 @@ static void aio_queue_work(struct kioctx * ctx)
  */
 static inline void aio_run_all_iocbs(struct kioctx *ctx)
 {
+<<<<<<< HEAD
 	spin_lock_irq(&ctx->ctx_lock);
 	while (__aio_run_iocbs(ctx))
 		;
 	spin_unlock_irq(&ctx->ctx_lock);
+=======
+#ifdef CONFIG_DYNAMIC_FSYNC
+	if (!early_suspend_active)
+		return 0;
+	else
+#endif
+	return sys_sync_file_range(fd, offset, nbytes, flags);
+>>>>>>> ea1e149... fs/dyn_sync_cntrl: dynamic sync control
 }
 
 /*
