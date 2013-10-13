@@ -43,7 +43,7 @@
 #define HOT_TEMP_OFFSET_MS			250
 #define DEFAULT_MIN_FREQ_INDEX		7
 
-static int enabled;
+static int enabled = true;
 static struct msm_thermal_data msm_thermal_info;
 static uint32_t limited_max_freq = MSM_CPUFREQ_NO_LIMIT;
 static struct delayed_work check_temp_work;
@@ -52,7 +52,7 @@ static unsigned int limit_idx;
 static unsigned int min_freq_index;
 static unsigned int limit_idx_high;
 static bool thermal_debug = false;
-static bool throttle_on = false;
+static bool throttle_on = true;
 static unsigned int throttle_temp = DEFAULT_THROTTLE_TEMP;
 
 static struct cpufreq_frequency_table *table;
