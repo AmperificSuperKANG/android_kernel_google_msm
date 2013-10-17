@@ -72,8 +72,8 @@
  * These two are scaled based on num_online_cpus()
  */
 #define ENABLE_ALL_LOAD_THRESHOLD	(120 * CPUS_AVAILABLE)
-#define ENABLE_LOAD_THRESHOLD		200
-#define DISABLE_LOAD_THRESHOLD		50
+#define ENABLE_LOAD_THRESHOLD		400
+#define DISABLE_LOAD_THRESHOLD		70
 
 /* Control flags */
 unsigned char flags;
@@ -94,7 +94,7 @@ static unsigned int history[SAMPLING_PERIODS];
 static unsigned int index;
 
 static int enabled = 1;
-static unsigned int min_online_cpus = 2;
+static unsigned int min_online_cpus = 1;
 static unsigned int max_online_cpus = 4;
 static unsigned int min_sampling_rate_ms = DEFAULT_SAMPLING_RATE;
 static unsigned int min_sampling_rate = 0;
