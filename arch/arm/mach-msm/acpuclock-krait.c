@@ -52,7 +52,6 @@
 #else
 #define FREQ_TABLE_SIZE		35
 #endif
-#endif
 
 static DEFINE_MUTEX(driver_lock);
 static DEFINE_SPINLOCK(l2_lock);
