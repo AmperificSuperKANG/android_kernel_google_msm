@@ -34,6 +34,8 @@
 #include <linux/pm.h>
 #include <linux/pm_runtime.h>
 
+#include <linux/cpufreq.h>
+
 #include <linux/input/lge_touch_core.h>
 
 #ifdef CONFIG_TOUCHSCREEN_SWEEP2WAKE
@@ -99,6 +101,11 @@ struct pointer_trace {
 static struct pointer_trace tr_data[MAX_TRACE];
 static int tr_last_index;
 #endif
+
+#define BOOSTED_TIME	1000	/* ms */
+int mako_boosted;
+static unsigned int boosted_time = BOOSTED_TIME;
+static struct timer_list boost_timer;
 
 #if defined(CONFIG_HAS_EARLYSUSPEND)
 static void touch_early_suspend(struct early_suspend *h);
@@ -845,6 +852,19 @@ static void touch_input_report(struct lge_touch_data *ts)
 	input_sync(ts->input_dev);
 }
 
+static void touch_boost(void)
+{
+	if (boosted_time) {
+		mako_boosted = 1;
+		mod_timer(&boost_timer, jiffies + msecs_to_jiffies(boosted_time));
+	}
+}
+
+static void handle_boost(unsigned long data)
+{
+	mako_boosted = 0;
+}
+
 /*
  * Touch work function
  */
@@ -858,6 +878,8 @@ static void touch_work_func(struct work_struct *work)
 
 	atomic_dec(&ts->next_work);
 	ts->ts_data.total_num = 0;
+
+	touch_boost();
 
 	if (unlikely(ts->work_sync_err_cnt >= MAX_RETRY_COUNT)) {
 		TOUCH_ERR_MSG("Work Sync Failed: Irq-pin has some unknown problems\n");
@@ -1734,6 +1756,22 @@ static ssize_t show_time_to_max_pressure(struct lge_touch_data *ts, char *buf)
 	return sprintf(buf, "%d\n", ts->accuracy_filter.time_to_max_pressure);
 }
 
+static ssize_t show_boosted_time(struct lge_touch_data *ts, char *buf)
+{
+	return sprintf(buf, "%d\n", boosted_time);
+}
+
+static ssize_t store_boosted_time(struct lge_touch_data *ts, const char *buf,
+			     size_t count)
+{
+	unsigned int value;
+	sscanf(buf, "%d", &value);
+
+	boosted_time = value;
+
+	return count;
+}
+
 static LGE_TOUCH_ATTR(platform_data, S_IRUGO | S_IWUSR, show_platform_data, NULL);
 static LGE_TOUCH_ATTR(firmware, S_IRUGO | S_IWUSR, show_fw_info, store_fw_upgrade);
 static LGE_TOUCH_ATTR(fw_ver, S_IRUGO | S_IWUSR, show_fw_ver, NULL);
@@ -1752,6 +1790,7 @@ static LGE_TOUCH_ATTR(delta_max, S_IRUGO | S_IWUSR, show_delta_max, store_delta_
 static LGE_TOUCH_ATTR(max_pressure, S_IRUGO | S_IWUSR, show_max_pressure, store_max_pressure);
 static LGE_TOUCH_ATTR(direction_count, S_IRUGO | S_IWUSR, show_direction_count, store_direction_count);
 static LGE_TOUCH_ATTR(time_to_max_pressure, S_IRUGO | S_IWUSR, show_time_to_max_pressure, store_time_to_max_pressure);
+static LGE_TOUCH_ATTR(boost_time, S_IRUGO | S_IWUSR, show_boosted_time, store_boosted_time);
 
 static struct attribute *lge_touch_attribute_list[] = {
 	&lge_touch_attr_platform_data.attr,
@@ -1770,6 +1809,7 @@ static struct attribute *lge_touch_attribute_list[] = {
 	&lge_touch_attr_max_pressure.attr,
 	&lge_touch_attr_direction_count.attr,
 	&lge_touch_attr_time_to_max_pressure.attr,
+	&lge_touch_attr_boost_time.attr,
 	NULL,
 };
 
@@ -2165,6 +2205,8 @@ static int touch_probe(struct i2c_client *client,
 
         device_init_wakeup(&client->dev, true);
 
+	setup_timer(&boost_timer, handle_boost, 0);
+
 #if defined(CONFIG_HAS_EARLYSUSPEND)
 	ts->early_suspend.level = EARLY_SUSPEND_LEVEL_BLANK_SCREEN + 1;
 	ts->early_suspend.suspend = touch_early_suspend;
@@ -2265,6 +2307,7 @@ static int touch_remove(struct i2c_client *client)
 		hrtimer_cancel(&ts->timer);
 	}
 
+	del_timer(&boost_timer);
 	input_unregister_device(ts->input_dev);
 	input_free_device(ts->input_dev);
 	kfree(ts);
