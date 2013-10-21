@@ -63,7 +63,6 @@ static int lm3530_write_reg(struct i2c_client *client,
 static int cur_main_lcd_level;
 static int saved_main_lcd_level;
 static int backlight_status = BL_ON;
-static int pwm_status = BL_ON;
 static unsigned int br_mode;
 static int min_br;
 static int max_br;
@@ -136,19 +135,15 @@ static void lm3530_backlight_on(struct i2c_client *client, int level)
 
 	mutex_lock(&backlight_mtx);
 	if (backlight_status == BL_OFF) {
-		pr_info("%s, ++ lm3530_backlight_on\n", __func__);
+		pr_info("%s, ++ lm3530_backlight_on  \n",__func__);
 		lm3530_hw_reset(client);
 
 		lm3530_write_reg(dev->client, 0xA0, 0x00);
-		lm3530_write_reg(dev->client, 0x10, 
-			(pwm_status == BL_OFF) ? dev->max_current & 0x1F 
-                               : dev->max_current );
+		lm3530_write_reg(dev->client, 0x10, dev->max_current);
 	}
 
 	if (first_boot) {
-		lm3530_write_reg(dev->client, 0x10, 
-			(pwm_status == BL_OFF) ? dev->max_current & 0x1F 
-                               : dev->max_current );
+		lm3530_write_reg(dev->client, 0x10, dev->max_current);
 		first_boot = false;
 	}
 
@@ -190,6 +185,8 @@ void lm3530_lcd_backlight_set_level(int level)
 		return;
 	}
 
+	if (level < min_br)
+		level = min_br;
 	if (level > max_br)
 		level = max_br;
 
@@ -212,17 +209,6 @@ void lm3530_lcd_backlight_pwm_disable(void)
 	lm3530_write_reg(client, 0x10, dev->max_current & 0x1F);
 }
 EXPORT_SYMBOL(lm3530_lcd_backlight_pwm_disable);
-
-static void lm3530_lcd_backlight_pwm_enable(void)
-{
-	struct i2c_client *client = lm3530_i2c_client;
-	struct lm3530_device *dev = i2c_get_clientdata(client);
-
-	if (backlight_status == BL_OFF)
-		return;
-
-	lm3530_write_reg(client, 0x10, dev->max_current);
-}
 
 int lm3530_lcd_backlight_on_status(void)
 {
@@ -400,43 +386,15 @@ static ssize_t lcd_backlight_store_on_off(struct device *dev,
 	return count;
 
 }
-static ssize_t lcd_backlight_show_pwm(struct device *dev,
-		struct device_attribute *attr, char *buf)
-{
-	return snprintf(buf, PAGE_SIZE, "%d\n",
-			pwm_status);
-}
-
-static ssize_t lcd_backlight_store_pwm(struct device *dev,
-		struct device_attribute *attr, const char *buf, size_t count)
-{
-	if (!count)
-		return -EINVAL;
-
-        pwm_status = simple_strtoul(buf, NULL, 10);
-        if (pwm_status == BL_OFF) {
-              lm3530_lcd_backlight_pwm_disable();
-        } else {
-              lm3530_lcd_backlight_pwm_enable();
-        }
-
-	return count;
-}
-
 DEVICE_ATTR(lm3530_level, 0644, lcd_backlight_show_level,
 		lcd_backlight_store_level);
 DEVICE_ATTR(lm3530_backlight_on_off, 0644, lcd_backlight_show_on_off,
 		lcd_backlight_store_on_off);
-DEVICE_ATTR(lm3530_pwm, 0644, lcd_backlight_show_pwm,
-		lcd_backlight_store_pwm);
-DEVICE_ATTR(lm3530_br_mode, 0644, lcd_show_br_mode, 
-		lcd_store_br_mode);
-DEVICE_ATTR(lm3530_min_br, 0644, lcd_show_min_br, 
-		lcd_store_min_br);
-DEVICE_ATTR(lm3530_max_br, 0644, lcd_show_max_br, 
-		lcd_store_max_br);
+DEVICE_ATTR(lm3530_br_mode, 0644, lcd_show_br_mode, lcd_store_br_mode);
+DEVICE_ATTR(lm3530_min_br, 0644, lcd_show_min_br, lcd_store_min_br);
+DEVICE_ATTR(lm3530_max_br, 0644, lcd_show_max_br, lcd_store_max_br);
 
-static const struct backlight_ops lm3530_bl_ops = {
+static struct backlight_ops lm3530_bl_ops = {
 	.update_status = bl_set_intensity,
 	.get_brightness = bl_get_intensity,
 };
@@ -498,8 +456,7 @@ static int __devinit lm3530_probe(struct i2c_client *i2c_dev,
 		}
 	}
 
-	err = device_create_file(&i2c_dev->dev, 
-			&dev_attr_lm3530_level);
+	err = device_create_file(&i2c_dev->dev, &dev_attr_lm3530_level);
 	if (err < 0) {
 		dev_err(&i2c_dev->dev, "failed to create 1st sysfs\n");
 		goto err_device_create_file_1;
@@ -510,29 +467,20 @@ static int __devinit lm3530_probe(struct i2c_client *i2c_dev,
 		dev_err(&i2c_dev->dev, "failed to create 2nd sysfs\n");
 		goto err_device_create_file_2;
 	}
-	err = device_create_file(&i2c_dev->dev,
-			&dev_attr_lm3530_pwm);
-	if (err < 0) {
-		dev_err(&i2c_dev->dev, "failed to create 3rd sysfs\n");
-		goto err_device_create_file_3;
-	}
-	err = device_create_file(&i2c_dev->dev, 
-			&dev_attr_lm3530_min_br);
+	err = device_create_file(&i2c_dev->dev, &dev_attr_lm3530_min_br);
 	if (err < 0) {
 		dev_err(&i2c_dev->dev, "failed to create 3nd sysfs\n");
-		goto err_device_create_file_4;
+		goto err_device_create_file_3;
 	}
-	err = device_create_file(&i2c_dev->dev, 
-			&dev_attr_lm3530_max_br);
+	err = device_create_file(&i2c_dev->dev, &dev_attr_lm3530_max_br);
 	if (err < 0) {
 		dev_err(&i2c_dev->dev, "failed to create 4nd sysfs\n");
-		goto err_device_create_file_5;
+		goto err_device_create_file_4;
 	}
-	err = device_create_file(&i2c_dev->dev, 
-			&dev_attr_lm3530_br_mode);
+	err = device_create_file(&i2c_dev->dev, &dev_attr_lm3530_br_mode);
 	if (err < 0) {
 		dev_err(&i2c_dev->dev, "failed to create 5nd sysfs\n");
-		goto err_device_create_file_6;
+		goto err_device_create_file_5;
 	}
 
 	lm3530_i2c_client = i2c_dev;
@@ -540,12 +488,10 @@ static int __devinit lm3530_probe(struct i2c_client *i2c_dev,
 	pr_info("lm3530 probed\n");
 	return 0;
 
-err_device_create_file_6:
-	device_remove_file(&i2c_dev->dev, &dev_attr_lm3530_max_br);
 err_device_create_file_5:
-	device_remove_file(&i2c_dev->dev, &dev_attr_lm3530_min_br);
+	device_remove_file(&i2c_dev->dev, &dev_attr_lm3530_max_br);
 err_device_create_file_4:
-	device_remove_file(&i2c_dev->dev, &dev_attr_lm3530_pwm);
+	device_remove_file(&i2c_dev->dev, &dev_attr_lm3530_min_br);
 err_device_create_file_3:
 	device_remove_file(&i2c_dev->dev, &dev_attr_lm3530_backlight_on_off);
 err_device_create_file_2:
