@@ -5,7 +5,7 @@
  * Defines for what uname() should return 
  */
 #ifndef UTS_SYSNAME
-#define UTS_SYSNAME "ASKP"
+#define UTS_SYSNAME "Ubuntu"
 #endif
 
 #ifndef UTS_NODENAME
