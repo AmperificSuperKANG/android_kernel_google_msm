@@ -114,7 +114,11 @@ static u64 boostpulse_endtime;
 #define DEFAULT_TIMER_SLACK (4 * DEFAULT_TIMER_RATE)
 static int timer_slack_val = DEFAULT_TIMER_SLACK;
 
+<<<<<<< HEAD
 static bool io_is_busy;
+=======
+static bool io_is_busy = true;
+>>>>>>> ec7f5d0... cpufreq: interactive: remove unused code for boostpulse chown
 
 static inline cputime64_t get_cpu_idle_time_jiffy(unsigned int cpu,
 						  cputime64_t *wall)
@@ -1062,8 +1066,11 @@ static int cpufreq_governor_interactive(struct cpufreq_policy *policy,
 		if (!cpu_online(policy->cpu))
 			return -EINVAL;
 
+<<<<<<< HEAD
 		mutex_lock(&gov_lock);
 
+=======
+>>>>>>> ec7f5d0... cpufreq: interactive: remove unused code for boostpulse chown
 		freq_table =
 			cpufreq_frequency_get_table(policy->cpu);
 		if (!hispeed_freq)
