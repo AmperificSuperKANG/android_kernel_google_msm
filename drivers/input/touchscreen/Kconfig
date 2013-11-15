@@ -986,13 +986,8 @@ config TOUCHSCREEN_CHARGER_NOTIFY
 	  or not.
 
 config TOUCHSCREEN_SWEEP2WAKE
-<<<<<<< HEAD
 	tristate "Sweep2Wake for touchscreens"
 	default n
 
-=======
-        tristate "Sweep2Wake for touchscreens"
-        default n
->>>>>>> 1564b73... drivers/touchscreen: add sweep2wake
 endif
 

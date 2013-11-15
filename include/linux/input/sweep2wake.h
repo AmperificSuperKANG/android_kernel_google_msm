@@ -26,15 +26,11 @@
 #include <linux/hrtimer.h>
 #include <linux/input/lge_touch_core.h>
 
-<<<<<<< HEAD
 #define S2W_I2C_DELAY		20
 #define S2W_I2C_MAX_COUNT	20
 
 extern int s2w_switch;
 extern unsigned int retry_cnt;
-=======
-extern int s2w_switch;
->>>>>>> 1564b73... drivers/touchscreen: add sweep2wake
 extern bool scr_suspended;
 extern bool scr_on_touch;
 extern bool exec_count;

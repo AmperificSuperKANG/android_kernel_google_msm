@@ -2359,15 +2359,10 @@ static void touch_early_suspend(struct early_suspend *h)
 	        touch_power_cntl(ts, ts->pdata->role->suspend_pwr);
         }
 #ifdef CONFIG_TOUCHSCREEN_SWEEP2WAKE
-<<<<<<< HEAD
         else if (s2w_switch > 0) {
 		release_all_ts_event(ts);
 		enable_irq_wake(ts->client->irq);
         }
-=======
-        else if (s2w_switch > 0)
-                enable_irq_wake(ts->client->irq);
->>>>>>> 1564b73... drivers/touchscreen: add sweep2wake
 #endif
 }
 
@@ -2377,12 +2372,9 @@ static void touch_late_resume(struct early_suspend *h)
 			container_of(h, struct lge_touch_data, early_suspend);
 
 #ifdef CONFIG_TOUCHSCREEN_SWEEP2WAKE
-<<<<<<< HEAD
 	int int_pin = 0;
 	int next_work = 0;
 
-=======
->>>>>>> 1564b73... drivers/touchscreen: add sweep2wake
         scr_suspended = false;
 #endif
 
@@ -2398,31 +2390,6 @@ static void touch_late_resume(struct early_suspend *h)
 
 #ifdef CONFIG_TOUCHSCREEN_SWEEP2WAKE
         if (s2w_switch == 0)
-<<<<<<< HEAD
-=======
-#endif
-        {
-	        touch_power_cntl(ts, ts->pdata->role->resume_pwr);
-
-	        if (ts->pdata->role->operation_mode == INTERRUPT_MODE)
-		        enable_irq(ts->client->irq);
-	        else
-		        hrtimer_start(&ts->timer,
-			        ktime_set(0, ts->pdata->role->report_period),
-					        HRTIMER_MODE_REL);
-
-	        if (ts->pdata->role->resume_pwr == POWER_ON)
-		        queue_delayed_work(touch_wq, &ts->work_init,
-			        msecs_to_jiffies(ts->pdata->role->booting_delay));
-	        else
-		        queue_delayed_work(touch_wq, &ts->work_init, 0);
-        }
-#ifdef CONFIG_TOUCHSCREEN_SWEEP2WAKE
-        else if (s2w_switch > 0)
-                disable_irq_wake(ts->client->irq);
-#endif
-}
->>>>>>> 1564b73... drivers/touchscreen: add sweep2wake
 #endif
         {
 	        touch_power_cntl(ts, ts->pdata->role->resume_pwr);
