@@ -36,8 +36,7 @@ config ARCH_MSM7X27
 	select CLEANCACHE
 	select QCACHE
 	select MSM_PM2 if PM
-	select MSM_RUN_QUEUE_STATS if MSM_SOC_REV_A
-	select DONT_MAP_HOLE_AFTER_MEMBANK0 if SPARSEMEM
+	select DONT_MAP_HOLE_AFTER_MEMBANK0
 	select MIGHT_HAVE_CACHE_L2X0
 	select MSM_MODEM_RESTART
 
@@ -50,7 +49,13 @@ config ARCH_MSM7X30
 	select MSM_REMOTE_SPINLOCK_DEKKERS
 	select ARCH_SPARSEMEM_ENABLE
 	select ARCH_HAS_HOLES_MEMORYMODEL
+	select MEMORY_HOTPLUG
+	select MEMORY_HOTREMOVE
+	select ARCH_ENABLE_MEMORY_HOTPLUG
+	select ARCH_ENABLE_MEMORY_HOTREMOVE
 	select MIGRATION
+	select ARCH_MEMORY_PROBE
+	select ARCH_MEMORY_REMOVE
 	select MSM_GPIOMUX
 	select RESERVE_FIRST_PAGE
 	select MSM_DALRPC
@@ -133,7 +138,6 @@ config ARCH_MSM8X60
 	select MULTI_IRQ_HANDLER
 	select MSM_MULTIMEDIA_USE_ION
 	select MSM_PM8X60 if PM
-	select MSM_RUN_QUEUE_STATS
 	select ARM_HAS_SG_CHAIN
 
 config ARCH_MSM8960
@@ -157,8 +161,9 @@ config ARCH_MSM8960
 	select MSM_SPM_V2
 	select MSM_L2_SPM
 	select MSM_NATIVE_RESTART
-	select DONT_MAP_HOLE_AFTER_MEMBANK0 if SPARSEMEM
+	select DONT_MAP_HOLE_AFTER_MEMBANK0
 	select MSM_REMOTE_SPINLOCK_SFPB
+	select ARCH_SPARSEMEM_ENABLE
 	select ARCH_HAS_HOLES_MEMORYMODEL
 	select CLEANCACHE
 	select QCACHE
@@ -170,10 +175,6 @@ config ARCH_MSM8960
 	select MSM_KRAIT_WFE_FIXUP
 	select MSM_IOMMU_GPU_SYNC
 	select MSM_CPU_PWRCTL
-	select GENERIC_TIME_VSYSCALL
-	select USE_USER_ACCESSIBLE_TIMERS
-	select ARM_USE_USER_ACCESSIBLE_TIMERS
-	select MSM_USE_USER_ACCESSIBLE_TIMERS
 
 config ARCH_MSM8930
 	bool "MSM8930"
@@ -196,8 +197,9 @@ config ARCH_MSM8930
 	select MSM_SPM_V2
 	select MSM_L2_SPM
 	select MSM_NATIVE_RESTART
-	select DONT_MAP_HOLE_AFTER_MEMBANK0 if SPARSEMEM
+	select DONT_MAP_HOLE_AFTER_MEMBANK0
 	select MSM_REMOTE_SPINLOCK_SFPB
+	select ARCH_SPARSEMEM_ENABLE
 	select ARCH_HAS_HOLES_MEMORYMODEL
 	select MSM_ULTRASOUND
 	select MULTI_IRQ_HANDLER
@@ -207,10 +209,6 @@ config ARCH_MSM8930
 	select MSM_KRAIT_WFE_FIXUP
 	select MSM_IOMMU_GPU_SYNC
 	select MSM_CPU_PWRCTL
-	select GENERIC_TIME_VSYSCALL
-	select USE_USER_ACCESSIBLE_TIMERS
-	select ARM_USE_USER_ACCESSIBLE_TIMERS
-	select MSM_USE_USER_ACCESSIBLE_TIMERS
 
 config ARCH_APQ8064
 	bool "APQ8064"
@@ -240,11 +238,6 @@ config ARCH_APQ8064
 	select MSM_KRAIT_WFE_FIXUP
 	select MSM_IOMMU_GPU_SYNC
 	select MSM_CPU_PWRCTL
-	select GENERIC_TIME_VSYSCALL
-	select USE_USER_ACCESSIBLE_TIMERS
-	select ARM_USE_USER_ACCESSIBLE_TIMERS
-	select MSM_USE_USER_ACCESSIBLE_TIMERS
-	select ENABLE_VMALLOC_SAVING
 
 config ARCH_MSM8974
 	bool "MSM8974"
@@ -269,7 +262,6 @@ config ARCH_MSM8974
 	select MSM_AUDIO_QDSP6V2 if SND_SOC
 	select MSM_RPM_REGULATOR_SMD
 	select ARM_HAS_SG_CHAIN
-	select DONT_MAP_HOLE_AFTER_MEMBANK0 if SPARSEMEM
 
 config ARCH_MPQ8092
 	bool "MPQ8092"
@@ -417,6 +409,7 @@ config  ARCH_MSM_KRAITMP
 	select HAVE_ARCH_HAS_CURRENT_TIMER
 	select MSM_JTAG if CORESIGHT_ETM
 	bool
+	select HAVE_HW_BRKPT_RESERVED_RW_ACCESS
 
 config  ARCH_MSM_CORTEXMP
 	select MSM_SMP
@@ -427,6 +420,7 @@ config  MSM_KRAIT_WFE_FIXUP
 
 config  ARCH_MSM_CORTEX_A5
 	bool
+	select HAVE_HW_BRKPT_RESERVED_RW_ACCESS
 
 config ARCH_MSM7X27A
 	bool
@@ -915,7 +909,6 @@ config MACH_MSM_DUMMY
 endmenu
 
 source "arch/arm/mach-msm/lge/Kconfig"
-source "arch/arm/mach-msm/asustek/Kconfig"
 
 config MSM_STACKED_MEMORY
 	bool "Stacked Memory"
@@ -1494,16 +1487,6 @@ config MSM_IPC_ROUTER_SMD_XPRT
 	help
 	  SMD Transport Layer for IPC Router
 
-config MSM_IPC_ROUTER_SECURITY
-	depends on MSM_IPC_ROUTER
-	bool "MSM IPC Router Security support"
-	help
-	  This feature of IPC Router will enforce security rules
-	  configured by a security script from the user-space. IPC Router
-	  once configured with the security rules will ensure that the
-	  sender of the message to a service belongs to the relevant
-	  Linux group as configured by the security script.
-
 config MSM_ONCRPCROUTER_DEBUG
 	depends on MSM_ONCRPCROUTER
 	default y
@@ -1621,49 +1604,14 @@ config MSM_CPU_FREQ_SET_MIN_MAX
 config MSM_CPU_FREQ_MAX
 	int "Max CPU Frequency"
 	depends on MSM_CPU_FREQ_SET_MIN_MAX
-	default 1512000
+	default 384000
 
 config MSM_CPU_FREQ_MIN
 	int "Min CPU Frequency"
 	depends on MSM_CPU_FREQ_SET_MIN_MAX
-	default 384000
-
-config MSM_CPU_FREQ_SUSPEND_MAX
-	int "Max Suspend CPU Frequency"
-	depends on MSM_CPU_FREQ_SET_MIN_MAX
-	default 702000
-
-config MSM_CPU_FREQ_SUSPEND_MIN
-	int "Min Suspend CPU Frequency"
-	depends on MSM_CPU_FREQ_SET_MIN_MAX
-	default 384000
+	default 245760
 
 endif # CPU_FREQ_MSM
-
-config LOW_CPUCLOCKS
-	bool "Enable ultra low CPU clocks"
-	default n
-	help
-	  Ultra low cpu frequencies enabled for CPU and L2 Cache
-
-config GPU_OVERCLOCK
-	bool "Enable GPU Overclocking option"
-	default n
-	help
-	  APQ8064 GPU overclocking to 487.5
-
-config GPU_OVERCLOCK_450
-        bool "Enable special GPU Overclocking option"
-	depends on GPU_OVERCLOCK
-        default n
-        help
-          APQ8064 GPU overclocking to 450
-
-config USERSPACE_VOLTAGE_CONTROL
-        bool "Enable Userspace CPU Voltage Control"
-        default n
-	help
-	  Userspace Voltage Control
 
 config MSM_AVS_HW
 	bool "Enable Adaptive Voltage Scaling (AVS)"
@@ -2531,21 +2479,6 @@ config MSM_L1_ERR_PANIC
 
 	  For production builds, you should probably say 'N' here.
 
-config MSM_L1_RECOV_ERR_PANIC
-	bool "Panic on recoverable L1 cache errors"
-	depends on MSM_CACHE_ERP && MSM_L1_ERR_PANIC
-	help
-	  Certain CPU designs may be able to automatically recover from certain
-	  kinds of L1 cache errors, even though the L1 cache itself may not
-	  support error correction. These errors should not result in any kind
-	  of corruption, but their presence is nevertheless an indication of
-	  poor system health. To cause the kernel to panic whenever a
-	  recoverable L1 cache error is detected, say 'Y' here. This may be
-	  useful as a debugging technique if general system instability is
-	  suspected.
-
-	  For production builds, you should definitely say 'N' here.
-
 config MSM_L1_ERR_LOG
 	bool "Log CPU ERP events to system memory"
 	depends on MSM_CACHE_ERP
@@ -2668,19 +2601,5 @@ config MSM_CPU_PWRCTL
 	  Droop detector mechanism can adversely affect krait plls during
 	  stand alone power collapse operation. Selecting this option
 	  ensures that they are always off.
-
-config MSM_USE_USER_ACCESSIBLE_TIMERS
-	bool "Enables mapping an MSM timer counter page to user space."
-	depends on ARM_USE_USER_ACCESSIBLE_TIMERS
-	help
-	  Enables MSM-specific user accessible timers via a shared
-	  memory page containing the cycle counter.
-
-config FORCE_FAST_CHARGE
-	bool "Force AC charge mode at will"
-	default y
-	help
-		A simple sysfs interface to force adapters that
-		are detected as USB to charge as AC.
 
 endif

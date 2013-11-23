@@ -14,7 +14,6 @@ obj-$(CONFIG_WM831X_POWER)	+= wm831x_power.o
 obj-$(CONFIG_WM8350_POWER)	+= wm8350_power.o
 obj-$(CONFIG_TEST_POWER)	+= test_power.o
 
-obj-$(CONFIG_CHARGER_SMB345)    += smb345-charger.o
 obj-$(CONFIG_BATTERY_DS2760)	+= ds2760_battery.o
 obj-$(CONFIG_BATTERY_DS2780)	+= ds2780_battery.o
 obj-$(CONFIG_BATTERY_DS2781)	+= ds2781_battery.o
@@ -61,4 +60,3 @@ obj-$(CONFIG_LTC4088_CHARGER)	+= ltc4088-charger.o
 obj-$(CONFIG_CHARGER_SMB347)	+= smb347-charger.o
 obj-$(CONFIG_BQ51051B_CHARGER)	+= bq51051b_charger.o
 obj-$(CONFIG_BATTERY_TEMP_CONTROL) += battery_temp_ctrl.o
-obj-$(CONFIG_BATTERY_ASUS_BQ27541)	+= bq27541_battery.o

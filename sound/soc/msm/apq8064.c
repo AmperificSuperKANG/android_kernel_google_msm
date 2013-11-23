@@ -83,8 +83,8 @@ enum {
 	INCALL_REC_STEREO,
 };
 
-static u32 top_spk_pamp_gpio  = PM8921_GPIO_PM_TO_SYS(19);
-static u32 bottom_spk_pamp_gpio = PM8921_GPIO_PM_TO_SYS(18);
+static u32 top_spk_pamp_gpio  = PM8921_GPIO_PM_TO_SYS(18);
+static u32 bottom_spk_pamp_gpio = PM8921_GPIO_PM_TO_SYS(19);
 static int msm_spk_control;
 static int msm_ext_bottom_spk_pamp;
 static int msm_ext_top_spk_pamp;
@@ -526,6 +526,8 @@ static const struct snd_soc_dapm_route apq8064_common_audio_map[] = {
 	{"RX_BIAS", NULL, "MCLK"},
 	{"LDO_H", NULL, "MCLK"},
 
+	{"HEADPHONE", NULL, "LDO_H"},
+
 	/* Speaker path */
 #ifdef CONFIG_SND_SOC_TPA2028D
 	{"Ext Spk Top", NULL, "LINEOUT1"},
@@ -547,8 +549,8 @@ static const struct snd_soc_dapm_route apq8064_common_audio_map[] = {
 	{"MIC BIAS3 External", NULL, "Handset SubMic"},
 #endif
 	/* Headset Mic */
-	{"AMIC2", NULL, "MCLK"},
-	{"MCLK", NULL, "Headset Mic"},
+	{"AMIC2", NULL, "MIC BIAS2 External"},
+	{"MIC BIAS2 External", NULL, "Headset Mic"},
 
 #ifndef CONFIG_SND_SOC_DUAL_AMIC
 	/* Headset ANC microphones */
@@ -1222,8 +1224,7 @@ static int msm_audrx_init(struct snd_soc_pcm_runtime *rtd)
 	snd_soc_dapm_add_routes(dapm, apq8064_common_audio_map,
 		ARRAY_SIZE(apq8064_common_audio_map));
 
-	if (machine_is_apq8064_mtp() || machine_is_apq8064_mako()
-		|| machine_is_apq8064_flo() || machine_is_apq8064_deb()) {
+	if (machine_is_apq8064_mtp() || machine_is_apq8064_mako()) {
 		snd_soc_dapm_add_routes(dapm, apq8064_mtp_audio_map,
 			ARRAY_SIZE(apq8064_mtp_audio_map));
 	} else  {
@@ -1306,7 +1307,7 @@ static int msm_audrx_init(struct snd_soc_pcm_runtime *rtd)
 
 	mbhc_cfg.read_fw_bin = apq8064_hs_detect_use_firmware;
 
-//	err = tabla_hs_detect(codec, &mbhc_cfg);
+	err = tabla_hs_detect(codec, &mbhc_cfg);
 
 	return err;
 #else
@@ -2140,8 +2141,7 @@ static int __init msm_audio_init(void)
 	u32	version = socinfo_get_platform_version();
 	if (!soc_class_is_apq8064() ||
 		(socinfo_get_id() == 130) ||
-		((machine_is_apq8064_mtp() || machine_is_apq8064_flo() ||
-		machine_is_apq8064_deb()) &&
+		(machine_is_apq8064_mtp() &&
 		(SOCINFO_VERSION_MINOR(version) == 1))) {
 		pr_info("%s: Not APQ8064 in SLIMBUS mode\n", __func__);
 		return -ENODEV;

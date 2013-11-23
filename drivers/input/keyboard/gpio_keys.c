@@ -324,14 +324,6 @@ static struct attribute_group gpio_keys_attr_group = {
 	.attrs = gpio_keys_attrs,
 };
 
-#ifdef CONFIG_MACH_ASUSTEK
-static char *key_descriptions[] = {
-	"KEY_VOLUMEDOWN",
-	"KEY_VOLUMEUP",
-	"KEY_POWER",
-};
-#endif
-
 static void gpio_keys_gpio_report_event(struct gpio_button_data *bdata)
 {
 	const struct gpio_keys_button *button = bdata->button;
@@ -353,16 +345,6 @@ static void gpio_keys_gpio_work_func(struct work_struct *work)
 	struct gpio_button_data *bdata =
 		container_of(work, struct gpio_button_data, work);
 
-#ifdef CONFIG_MACH_ASUSTEK
-	/* Valid keys were logged for debugging */
-	const struct gpio_keys_button *button = bdata->button;
-	int state = (gpio_get_value_cansleep(button->gpio) ? 1 : 0)
-		^ button->active_low;
-
-	if ((button->code <= KEY_POWER) && (button->code >= KEY_VOLUMEDOWN))
-		pr_info("gpio_keys: %s %s\n", state ? "Pressed" : "Released",
-			key_descriptions[button->code - KEY_VOLUMEDOWN]);
-#endif
 	gpio_keys_gpio_report_event(bdata);
 }
 
@@ -730,13 +712,6 @@ static int __devinit gpio_keys_probe(struct platform_device *pdev)
 		dev_err(dev, "Unable to export keys/switches, error: %d\n",
 			error);
 		goto fail2;
-	}
-
-	/* If any single key button can wake the device, we need to inform
-	   the input subsystem not to mess with our key state during a suspend
-	   and resume cycle. */
-	if (wakeup) {
-		device_set_wakeup_capable(&input->dev, true);
 	}
 
 	error = input_register_device(input);

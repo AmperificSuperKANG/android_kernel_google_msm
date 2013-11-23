@@ -31,7 +31,6 @@ VREG_CONSUMERS(L2) = {
 	REGULATOR_SUPPLY("dsi_vdda",		"mipi_dsi.1"),
 	REGULATOR_SUPPLY("mipi_csi_vdd",	"msm_csid.0"),
 	REGULATOR_SUPPLY("mipi_csi_vdd",	"msm_csid.1"), 
-	REGULATOR_SUPPLY("dsi_pll_vdda",        "mdp.0"),
 };
 VREG_CONSUMERS(L3) = {
 	REGULATOR_SUPPLY("8921_l3",		NULL),
@@ -247,7 +246,6 @@ VREG_CONSUMERS(LVS7) = {
 	REGULATOR_SUPPLY("pll_vdd",		"pil_riva"),
 	REGULATOR_SUPPLY("lvds_vdda",		"lvds.0"),
 	REGULATOR_SUPPLY("dsi1_vddio",		"mipi_dsi.1"),
-	REGULATOR_SUPPLY("dsi_pll_vddio",       "mdp.0"),
 	REGULATOR_SUPPLY("hdmi_vdda",		"hdmi_msm.0"),
 };
 VREG_CONSUMERS(NCP) = {
@@ -380,8 +378,7 @@ VREG_CONSUMERS(EXT_DSV_LOAD) = {
 	{ \
 		.constraints = { \
 			.name		= _name, \
-			.valid_ops_mask	= REGULATOR_CHANGE_VOLTAGE | \
-							  REGULATOR_CHANGE_STATUS, \
+			.valid_ops_mask	= REGULATOR_CHANGE_VOLTAGE, \
 			.min_uV		= _min_uV, \
 			.max_uV		= _max_uV, \
 		}, \
@@ -496,15 +493,15 @@ apq8064_gpio_regulator_pdata[] __devinitdata = {
 /* SAW regulator constraints */
 struct regulator_init_data msm8064_saw_regulator_pdata_8921_s5 =
 	/*	      ID  vreg_name	       min_uV   max_uV */
-	SAW_VREG_INIT(S5, "8921_s5",	       600000, 1300000);
+	SAW_VREG_INIT(S5, "8921_s5",	       700000, 1300000);
 struct regulator_init_data msm8064_saw_regulator_pdata_8921_s6 =
-	SAW_VREG_INIT(S6, "8921_s6",	       600000, 1300000);
+	SAW_VREG_INIT(S6, "8921_s6",	       700000, 1300000);
 
 struct regulator_init_data msm8064_saw_regulator_pdata_8821_s0 =
 	/*	      ID       vreg_name	min_uV  max_uV */
-	SAW_VREG_INIT(8821_S0, "8821_s0",       600000, 1300000);
+	SAW_VREG_INIT(8821_S0, "8821_s0",       700000, 1300000);
 struct regulator_init_data msm8064_saw_regulator_pdata_8821_s1 =
-	SAW_VREG_INIT(8821_S1, "8821_s1",       600000, 1300000);
+	SAW_VREG_INIT(8821_S1, "8821_s1",       700000, 1300000);
 
 /* PM8921 regulator constraints */
 struct pm8xxx_regulator_platform_data

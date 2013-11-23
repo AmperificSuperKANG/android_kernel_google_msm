@@ -136,6 +136,5 @@ struct pm8xxx_led_platform_data {
 	struct	pm8xxx_led_config	*configs;
 	u32				num_configs;
 	int				use_pwm;
-	void	(*pwm_init)		(void);
 };
 #endif /* __LEDS_PM8XXX_H__ */

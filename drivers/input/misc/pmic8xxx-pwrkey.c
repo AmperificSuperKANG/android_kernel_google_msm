@@ -23,8 +23,8 @@
 #include <linux/mfd/pm8xxx/core.h>
 #include <linux/input/pmic8xxx-pwrkey.h>
 
-#ifdef CONFIG_TOUCHSCREEN_SWEEP2WAKE
-#include <linux/input/sweep2wake.h>
+#ifdef CONFIG_TOUCH_WAKE
+#include <linux/touch_wake.h>
 #endif
 
 #define PON_CNTL_1 0x1C
@@ -198,11 +198,6 @@ static int __devinit pmic8xxx_pwrkey_probe(struct platform_device *pdev)
 		input_sync(pwrkey->pwr);
 	}
 
-#ifdef CONFIG_TOUCHSCREEN_SWEEP2WAKE
-	sweep2wake_setdev(pwr);
-	printk(KERN_INFO "[sweep2wake]: set device %s\n", pwr->name);
-#endif
-
 	err = request_any_context_irq(key_press_irq, pwrkey_press_irq,
 		IRQF_TRIGGER_RISING, "pmic8xxx_pwrkey_press", pwrkey);
 	if (err < 0) {
@@ -221,6 +216,11 @@ static int __devinit pmic8xxx_pwrkey_probe(struct platform_device *pdev)
 	}
 
 	device_init_wakeup(&pdev->dev, pdata->wakeup);
+
+#ifdef CONFIG_TOUCH_WAKE
+	pr_info("powerkey device set\n");
+	set_powerkeydev(pwr);
+#endif
 
 	return 0;
 

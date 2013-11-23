@@ -3,6 +3,7 @@
 #ifndef FREEZER_H_INCLUDED
 #define FREEZER_H_INCLUDED
 
+#include <linux/debug_locks.h>
 #include <linux/sched.h>
 #include <linux/wait.h>
 #include <linux/atomic.h>
@@ -42,15 +43,23 @@ extern void thaw_processes(void);
 extern void thaw_kernel_threads(void);
 
 /*
+ * HACK: prevent sleeping while atomic warnings due to ARM signal handling
+ * disabling irqs
+ */
+static inline bool try_to_freeze_nowarn(void)
+{
+	if (likely(!freezing(current)))
+		return false;
+	return __refrigerator(false);
+}
+
+/*
  * DO NOT ADD ANY NEW CALLERS OF THIS FUNCTION
  * If try_to_freeze causes a lockdep warning it means the caller may deadlock
  */
 static inline bool try_to_freeze_unsafe(void)
 {
-/* This causes problems for ARM targets and is a known
- * problem upstream.
- *	might_sleep();
- */
+	might_sleep();
 	if (likely(!freezing(current)))
 		return false;
 	return __refrigerator(false);
@@ -58,6 +67,8 @@ static inline bool try_to_freeze_unsafe(void)
 
 static inline bool try_to_freeze(void)
 {
+	if (!(current->flags & PF_NOFREEZE))
+		debug_check_no_locks_held();
 	return try_to_freeze_unsafe();
 }
 
@@ -154,9 +165,10 @@ static inline bool freezer_should_skip(struct task_struct *p)
 }
 
 /*
- * These functions are intended to be used whenever you want allow a sleeping
- * task to be frozen. Note that neither return any clear indication of
- * whether a freeze event happened while in this function.
+ * These functions are intended to be used whenever you want allow a task that's
+ * sleeping in TASK_UNINTERRUPTIBLE or TASK_KILLABLE state to be frozen. Note
+ * that neither return any clear indication of whether a freeze event happened
+ * while in this function.
  */
 
 /* Like schedule(), but should not block the freezer. */

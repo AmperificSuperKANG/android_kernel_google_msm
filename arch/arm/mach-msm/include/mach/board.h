@@ -180,22 +180,20 @@ enum msm_sensor_type {
 	YUV_SENSOR,
 };
 
-#ifdef CONFIG_MSM_CAMERA
 enum camera_vreg_type {
-       REG_LDO,
-       REG_VS,
-       REG_GPIO,
-       REG_MAX
+	REG_LDO,
+	REG_VS,
+	REG_GPIO,
+	REG_MAX
 };
 
 struct camera_vreg_t {
-       const char *reg_name;
-       enum camera_vreg_type type;
-       int min_voltage;
-       int max_voltage;
-       int op_mode;
+	const char *reg_name;
+	enum camera_vreg_type type;
+	int min_voltage;
+	int max_voltage;
+	int op_mode;
 };
-#endif
 
 struct msm_gpio_set_tbl {
 	unsigned gpio;
@@ -203,14 +201,9 @@ struct msm_gpio_set_tbl {
 	uint32_t delay;
 };
 
-#ifdef CONFIG_MSM_CAMERA
 struct msm_camera_csi_lane_params {
 	uint16_t csi_lane_assign;
 	uint16_t csi_lane_mask;
-};
-#endif
-struct msm_camera_gpio_num_info {
-	uint16_t gpio_num[2];
 };
 
 struct msm_camera_gpio_conf {
@@ -227,7 +220,6 @@ struct msm_camera_gpio_conf {
 	uint8_t camera_off_table_size;
 	uint32_t *camera_on_table;
 	uint8_t camera_on_table_size;
-	struct msm_camera_gpio_num_info *gpio_num_info;
 };
 
 enum msm_camera_i2c_mux_mode {
@@ -304,7 +296,6 @@ struct msm_camera_sensor_info {
 	struct msm_actuator_info *actuator_info;
 	int pmic_gpio_enable;
 	struct msm_eeprom_info *eeprom_info;
-	char vendor_name[32];
 };
 
 struct msm_camera_board_info {
@@ -497,8 +488,6 @@ struct mipi_dsi_panel_platform_data {
 	int fpga_ctrl_mode;
 	int fpga_3d_config_addr;
 	int *gpio;
-	int recovery_backlight;
-	int set_recovery_bl_done;
 	struct mipi_dsi_phy_ctrl *phy_ctrl_settings;
 	char dlane_swap;
 	void (*dsi_pwm_cfg)(void);

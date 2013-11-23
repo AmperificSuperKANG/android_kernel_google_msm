@@ -2,7 +2,7 @@
  * Simple IO scheduler
  * Based on Noop, Deadline and V(R) IO schedulers.
  *
- * Copyright (C) 2012 Miguel Boton <mboton@gmail.com>
+ * Copyright (C) 2012 Miguel Boton <mboton@lowlevel-studios.com>
  *
  *
  * This algorithm does not do any kind of sorting, as it is aimed for
@@ -23,15 +23,25 @@
 enum { ASYNC, SYNC };
 
 /* Tunables */
-static const int sync_read_expire  = 1000;	/* max time before a sync read is submitted. */
-static const int sync_write_expire = 5000;	/* max time before a sync write is submitted. */
 
-static const int async_read_expire  =  4 * HZ;	/* ditto for async, these limits are SOFT! */
-static const int async_write_expire = 16 * HZ;	/* ditto for async, these limits are SOFT! */
+/* max time before a sync read is submitted. */
+static const int sync_read_expire  = HZ / 2;
+/* max time before a sync write is submitted. */
+static const int sync_write_expire = 2 * HZ;
 
-static const int writes_starved = 2;		/* max times reads can starve a write */
-static const int fifo_batch     = 8;		/* # of sequential requests treated as one
-						   by the above parameters. For throughput. */
+/* ditto for async, these limits are SOFT! */
+static const int async_read_expire  =  4 * HZ;
+/* ditto for async, these limits are SOFT! */
+static const int async_write_expire = 16 * HZ;
+
+
+/* max times reads can starve a write */
+static const int writes_starved = 2;
+/*
+ * # of sequential requests treated as one
+ * by the above parameters. For throughput.
+ */
+static const int fifo_batch     = 8;
 
 /* Elevator data */
 struct sio_data {
@@ -308,7 +318,8 @@ SHOW_FUNCTION(sio_writes_starved_show, sd->writes_starved, 0);
 #undef SHOW_FUNCTION
 
 #define STORE_FUNCTION(__FUNC, __PTR, MIN, MAX, __CONV)			\
-static ssize_t __FUNC(struct elevator_queue *e, const char *page, size_t count)	\
+static ssize_t __FUNC(struct elevator_queue *e, const char *page,	\
+							size_t count)	\
 {									\
 	struct sio_data *sd = e->elevator_data;			\
 	int __data;							\
@@ -323,10 +334,14 @@ static ssize_t __FUNC(struct elevator_queue *e, const char *page, size_t count)	
 		*(__PTR) = __data;					\
 	return ret;							\
 }
-STORE_FUNCTION(sio_sync_read_expire_store, &sd->fifo_expire[SYNC][READ], 0, INT_MAX, 1);
-STORE_FUNCTION(sio_sync_write_expire_store, &sd->fifo_expire[SYNC][WRITE], 0, INT_MAX, 1);
-STORE_FUNCTION(sio_async_read_expire_store, &sd->fifo_expire[ASYNC][READ], 0, INT_MAX, 1);
-STORE_FUNCTION(sio_async_write_expire_store, &sd->fifo_expire[ASYNC][WRITE], 0, INT_MAX, 1);
+STORE_FUNCTION(sio_sync_read_expire_store, &sd->fifo_expire[SYNC][READ], 0,
+								INT_MAX, 1);
+STORE_FUNCTION(sio_sync_write_expire_store, &sd->fifo_expire[SYNC][WRITE], 0,
+								INT_MAX, 1);
+STORE_FUNCTION(sio_async_read_expire_store, &sd->fifo_expire[ASYNC][READ], 0,
+								INT_MAX, 1);
+STORE_FUNCTION(sio_async_write_expire_store, &sd->fifo_expire[ASYNC][WRITE], 0,
+								INT_MAX, 1);
 STORE_FUNCTION(sio_fifo_batch_store, &sd->fifo_batch, 0, INT_MAX, 0);
 STORE_FUNCTION(sio_writes_starved_store, &sd->writes_starved, 0, INT_MAX, 0);
 #undef STORE_FUNCTION
@@ -364,7 +379,9 @@ static struct elevator_type iosched_sio = {
 static int __init sio_init(void)
 {
 	/* Register elevator */
-	return elv_register(&iosched_sio);
+	elv_register(&iosched_sio);
+
+	return 0;
 }
 
 static void __exit sio_exit(void)
@@ -373,11 +390,7 @@ static void __exit sio_exit(void)
 	elv_unregister(&iosched_sio);
 }
 
-#ifdef CONFIG_FAST_RESUME
-beforeresume_initcall(sio_init);
-#else
 module_init(sio_init);
-#endif
 module_exit(sio_exit);
 
 MODULE_AUTHOR("Miguel Boton");

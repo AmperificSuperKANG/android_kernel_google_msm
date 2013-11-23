@@ -12,17 +12,14 @@
  *
  */
 
-#ifndef _SP_TX_DRV_H
-#define _SP_TX_DRV_H
+#ifndef __SP_TX_DRV_H
+#define __SP_TX_DRV_H
 
 
 #define FALSE 0
 #define TRUE 1
 
-/*#define D(fmt, arg...) printk("<1>```%s:%d: " fmt, __func__, __LINE__, ##arg)*/
-
-#define MAX_BUF_CNT 16
-
+#define MAX_BUF_CNT 10
 #define VID_DVI_MODE 0x00
 #define VID_HDMI_MODE 0x01
 #define VIDEO_STABLE_TH 3
@@ -31,16 +28,10 @@
 #define SP_TX_HDCP_FAIL_TH 10
 #define SP_TX_DS_VID_STB_TH 20
 
-/*Use for Touch CallBack in HDMI Mode*/
-#define UNPLUG_HDMI 0
-#define PLUG_HDMI 10
-extern void touch_callback(unsigned cable_status);
-
 extern unchar bedid_extblock[128];
 extern unchar bedid_firstblock[128];
-extern unchar slimport_link_bw;
-extern int hdcp_en;
 
+extern bool anx7808_ver_ba;
 
 enum SP_TX_System_State {
 	STATE_INIT = 1,
@@ -77,6 +68,7 @@ enum SP_TX_POWER_BLOCK {
 };
 
 enum SP_TX_SEND_MSG {
+	MSG_OCM_EN,
 	MSG_INPUT_HDMI,
 	MSG_INPUT_DVI,
 	MSG_CLEAR_IRQ,
@@ -125,12 +117,12 @@ enum SP_LINK_BW {
 };
 
 enum RX_CBL_TYPE {
-	RX_NULL = 0x00,
 	RX_HDMI = 0x01,
 	RX_DP = 0x02,
-	RX_VGA_GEN = 0x03,
-	RX_VGA_9832 = 0x04,
+	RX_VGA = 0x03,
+	RX_NULL = 0x00
 };
+
 void sp_tx_variable_init(void);
 void sp_tx_initialization(void);
 void sp_tx_show_infomation(void);
@@ -147,6 +139,7 @@ unchar sp_tx_hw_link_training(void);
 unchar sp_tx_lt_pre_config(void);
 void sp_tx_video_mute(unchar enable);
 void sp_tx_set_colorspace(void);
+void sp_tx_set_3d_packets(void);
 void sp_tx_int_irq_handler(void);
 void sp_tx_send_message(enum SP_TX_SEND_MSG message);
 void sp_tx_hdcp_process(void);
@@ -155,15 +148,11 @@ unchar sp_tx_get_cable_type(void);
 bool sp_tx_get_dp_connection(void);
 bool sp_tx_get_hdmi_connection(void);
 bool sp_tx_get_vga_connection(void);
-unchar sp_tx_get_downstream_type(void);
-unchar sp_tx_get_downstream_connection(enum RX_CBL_TYPE cabletype);
 void sp_tx_edid_read(void);
 uint sp_tx_link_err_check(void);
 void sp_tx_eye_diagram_test(void);
 void sp_tx_phy_auto_test(void);
 void sp_tx_enable_video_input(unchar enable);
-void sp_tx_disable_slimport_hdcp(void);
-void sp_tx_pull_down_id(bool enable);
 
 /* ***************************************************************** */
 /* Functions protoype for HDMI Input */

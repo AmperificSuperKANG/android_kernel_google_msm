@@ -30,8 +30,6 @@
 #include <linux/mutex.h>
 #include <linux/syscore_ops.h>
 
-#include <mach/cpufreq.h>
-
 #include <trace/events/power.h>
 
 /**
@@ -320,12 +318,13 @@ EXPORT_SYMBOL_GPL(cpufreq_notify_transition);
 void cpufreq_notify_utilization(struct cpufreq_policy *policy,
 		unsigned int util)
 {
-	if (policy)
-		policy->util = util;
+	if (!policy)
+		return;
 
-	if (policy->util >= MIN_CPU_UTIL_NOTIFY)
-		sysfs_notify(&policy->kobj, NULL, "cpu_utilization");
-
+	if (util > 25 && policy->util < 100)
+		policy->util++;
+	else if (policy->util > 0)
+		policy->util--;
 }
 
 /*********************************************************************
@@ -610,31 +609,6 @@ static ssize_t show_scaling_setspeed(struct cpufreq_policy *policy, char *buf)
 	return policy->governor->show_setspeed(policy, buf);
 }
 
-static ssize_t store_dvfs_test(struct cpufreq_policy *policy,
-					const char *buf, size_t count)
-{
-	unsigned int enable= 0;
-	unsigned int ret;
-
-	if (!policy->governor || !policy->governor->start_dvfs_test)
-		return -EINVAL;
-
-	ret = sscanf(buf, "%u", &enable);
-	if (ret != 1)
-		return -EINVAL;
-
-	policy->governor->start_dvfs_test(policy, enable);
-
-	return count;
-}
-
-static ssize_t show_dvfs_test(struct cpufreq_policy *policy, char *buf)
-{
-	if (!policy->governor || !policy->governor->show_dvfs_test)
-		return sprintf(buf, "<unsupported>\n");
-
-	return policy->governor->show_dvfs_test(policy, buf);
-}
 /**
  * show_scaling_driver - show the current cpufreq HW/BIOS limitation
  */
@@ -649,68 +623,6 @@ static ssize_t show_bios_limit(struct cpufreq_policy *policy, char *buf)
 	}
 	return sprintf(buf, "%u\n", policy->cpuinfo.max_freq);
 }
-
-#ifdef CONFIG_USERSPACE_VOLTAGE_CONTROL
-
-extern ssize_t acpuclk_get_vdd_levels_str(char *buf);
-extern void acpuclk_set_vdd(unsigned acpu_khz, int vdd);
-
-static ssize_t show_vdd_levels(struct kobject *a, struct attribute *b, char *buf) {
-	return acpuclk_get_vdd_levels_str(buf);
-}
-
-static ssize_t store_vdd_levels(struct kobject *a, struct attribute *b, const char *buf, size_t count) {
-
-	int i = 0, j;
-	int pair[2] = { 0, 0 };
-	int sign = 0;
-
-	if (count < 1)
-		return 0;
-
-	if (buf[0] == '-') {
-		sign = -1;
-		i++;
-	}
-	else if (buf[0] == '+') {
-		sign = 1;
-		i++;
-	}
-
-	for (j = 0; i < count; i++) {
-
-		char c = buf[i];
-
-		if ((c >= '0') && (c <= '9')) {
-			pair[j] *= 10;
-			pair[j] += (c - '0');
-		}
-		else if ((c == ' ') || (c == '\t')) {
-			if (pair[j] != 0) {
-				j++;
-
-				if ((sign != 0) || (j > 1))
-					break;
-			}
-		}
-		else
-			break;
-	}
-
-	if (sign != 0) {
-		if (pair[0] > 0)
-			acpuclk_set_vdd(0, sign * pair[0]);
-	}
-	else {
-		if ((pair[0] > 0) && (pair[1] > 0))
-			acpuclk_set_vdd((unsigned)pair[0], pair[1]);
-		else
-			return -EINVAL;
-	}
-	return count;
-}
-
-#endif
 
 cpufreq_freq_attr_ro_perm(cpuinfo_cur_freq, 0400);
 cpufreq_freq_attr_ro(cpuinfo_min_freq);
@@ -727,10 +639,6 @@ cpufreq_freq_attr_rw(scaling_min_freq);
 cpufreq_freq_attr_rw(scaling_max_freq);
 cpufreq_freq_attr_rw(scaling_governor);
 cpufreq_freq_attr_rw(scaling_setspeed);
-cpufreq_freq_attr_rw(dvfs_test);
-#ifdef CONFIG_USERSPACE_VOLTAGE_CONTROL
-define_one_global_rw(vdd_levels);
-#endif
 
 static struct attribute *default_attrs[] = {
 	&cpuinfo_min_freq.attr,
@@ -745,21 +653,8 @@ static struct attribute *default_attrs[] = {
 	&scaling_driver.attr,
 	&scaling_available_governors.attr,
 	&scaling_setspeed.attr,
-        &dvfs_test.attr,
 	NULL
 };
-
-#ifdef CONFIG_USERSPACE_VOLTAGE_CONTROL
-static struct attribute *vddtbl_attrs[] = {
-	&vdd_levels.attr,
-	NULL
-};
-
-static struct attribute_group vddtbl_attr_group = {
-	.attrs = vddtbl_attrs,
-	.name = "vdd_table",
-};
-#endif
 
 struct kobject *cpufreq_global_kobject;
 EXPORT_SYMBOL(cpufreq_global_kobject);
@@ -897,8 +792,6 @@ static int cpufreq_add_dev_policy(unsigned int cpu,
 
 			spin_lock_irqsave(&cpufreq_driver_lock, flags);
 			cpumask_copy(managed_policy->cpus, policy->cpus);
-			cpumask_and(managed_policy->cpus,
-					managed_policy->cpus, cpu_online_mask);
 			per_cpu(cpufreq_cpu_data, cpu) = managed_policy;
 			spin_unlock_irqrestore(&cpufreq_driver_lock, flags);
 
@@ -1362,6 +1255,26 @@ static void cpufreq_out_of_sync(unsigned int cpu, unsigned int old_freq,
 	cpufreq_notify_transition(&freqs, CPUFREQ_POSTCHANGE);
 }
 
+/**
+ * cpufreq_quick_get_util - get the CPU utilization from policy->util
+ * @cpu: CPU number
+ *
+ * This is the last known util, without actually getting it from the driver.
+ * Return value will be same as what is shown in util in sysfs.
+ */
+unsigned int cpufreq_quick_get_util(unsigned int cpu)
+{
+	struct cpufreq_policy *policy = cpufreq_cpu_get(cpu);
+	unsigned int ret_util = 0;
+
+	if (policy) {
+		ret_util = policy->util;
+		cpufreq_cpu_put(policy);
+	}
+
+	return ret_util;
+}
+EXPORT_SYMBOL(cpufreq_quick_get_util);
 
 /**
  * cpufreq_quick_get - get the CPU frequency (in kHz) from policy->cur
@@ -1663,22 +1576,6 @@ no_policy:
 }
 EXPORT_SYMBOL_GPL(cpufreq_driver_target);
 
-int __cpufreq_driver_getavg(struct cpufreq_policy *policy, unsigned int cpu)
-{
-	int ret = 0;
-
-	policy = cpufreq_cpu_get(policy->cpu);
-	if (!policy)
-		return -EINVAL;
-
-	if (cpu_online(cpu) && cpufreq_driver->getavg)
-		ret = cpufreq_driver->getavg(policy, cpu);
-
-	cpufreq_cpu_put(policy);
-	return ret;
-}
-EXPORT_SYMBOL_GPL(__cpufreq_driver_getavg);
-
 /*
  * when "event" is CPUFREQ_GOV_LIMITS
  */
@@ -1862,8 +1759,6 @@ static int __cpufreq_set_policy(struct cpufreq_policy *data,
 
 	data->min = policy->min;
 	data->max = policy->max;
-
-	msm_cpufreq_set_freq_limits(policy->cpu, policy->min, policy->max);
 
 	pr_debug("new min and max freqs are %u - %u kHz\n",
 					data->min, data->max);
@@ -2103,9 +1998,6 @@ EXPORT_SYMBOL_GPL(cpufreq_unregister_driver);
 static int __init cpufreq_core_init(void)
 {
 	int cpu;
-#ifdef CONFIG_USERSPACE_VOLTAGE_CONTROL
-	int rc;
-#endif
 
 	if (cpufreq_disabled())
 		return -ENODEV;
@@ -2118,9 +2010,7 @@ static int __init cpufreq_core_init(void)
 	cpufreq_global_kobject = kobject_create_and_add("cpufreq", &cpu_subsys.dev_root->kobj);
 	BUG_ON(!cpufreq_global_kobject);
 	register_syscore_ops(&cpufreq_syscore_ops);
-#ifdef CONFIG_USERSPACE_VOLTAGE_CONTROL
-	rc = sysfs_create_group(cpufreq_global_kobject, &vddtbl_attr_group);
-#endif
+
 	return 0;
 }
 core_initcall(cpufreq_core_init);

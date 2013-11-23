@@ -1059,7 +1059,6 @@ int ieee80211_build_preq_ies(struct ieee80211_local *local, u8 *buffer,
 	if (sband->vht_cap.vht_supported)
 		pos = ieee80211_ie_build_vht_cap(pos, &sband->vht_cap,
 						 sband->vht_cap.cap);
-
 	return pos - buffer;
 }
 

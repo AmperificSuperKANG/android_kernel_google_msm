@@ -170,8 +170,6 @@ struct msm_panel_info {
 	__u32 is_3d_panel;
 	__u32 frame_rate;
 	__u32 frame_interval;
-	__u32 width;			/* width in mm     */
-	__u32 height;			/* height in mm    */
 
 	struct mddi_panel_info mddi;
 	struct lcd_panel_info lcd;
@@ -192,7 +190,6 @@ struct msm_fb_panel_data {
 	void (*set_rect) (int x, int y, int xres, int yres);
 	void (*set_vsync_notifier) (msm_fb_vsync_handler_type, void *arg);
 	void (*set_backlight) (struct msm_fb_data_type *);
-	void (*set_recovery_backlight) (struct msm_fb_data_type *);
 	int (*get_backlight_on_status) (void);
 
 	/* function entry chain */

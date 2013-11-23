@@ -181,10 +181,6 @@ struct cpufreq_governor {
 					 char *buf);
 	int	(*store_setspeed)	(struct cpufreq_policy *policy,
 					 unsigned int freq);
-	ssize_t	(*show_dvfs_test)	(struct cpufreq_policy *policy,
-					 char *buf);
-	int 	(*start_dvfs_test)	(struct cpufreq_policy *policy,
-					 unsigned int enable);
 	unsigned int max_transition_latency; /* HW must be able to switch to
 			next freq faster than this value in nano secs or we
 			will fallback to performance governor */
@@ -203,16 +199,11 @@ extern int __cpufreq_driver_target(struct cpufreq_policy *policy,
 				   unsigned int relation);
 
 
-extern int __cpufreq_driver_getavg(struct cpufreq_policy *policy,
-				   unsigned int cpu);
-
 int cpufreq_register_governor(struct cpufreq_governor *governor);
 void cpufreq_unregister_governor(struct cpufreq_governor *governor);
 
 int lock_policy_rwsem_write(int cpu);
 void unlock_policy_rwsem_write(int cpu);
-
-extern int mako_boosted;
 
 /*********************************************************************
  *                      CPUFREQ DRIVER INTERFACE                     *
@@ -242,8 +233,6 @@ struct cpufreq_driver {
 	unsigned int	(*get)	(unsigned int cpu);
 
 	/* optional */
-	unsigned int (*getavg)	(struct cpufreq_policy *policy,
-				 unsigned int cpu);
 	int	(*bios_limit)	(int cpu, unsigned int *limit);
 
 	int	(*exit)		(struct cpufreq_policy *policy);
@@ -340,6 +329,7 @@ static inline unsigned int cpufreq_get(unsigned int cpu)
 #ifdef CONFIG_CPU_FREQ
 unsigned int cpufreq_quick_get(unsigned int cpu);
 unsigned int cpufreq_quick_get_max(unsigned int cpu);
+unsigned int cpufreq_quick_get_util(unsigned int cpu);
 #else
 static inline unsigned int cpufreq_quick_get(unsigned int cpu)
 {

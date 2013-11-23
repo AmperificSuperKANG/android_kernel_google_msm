@@ -424,8 +424,7 @@ static int hw_ep_flush(int num, int dir)
 	int n = hw_ep_bit(num, dir);
 	struct ci13xxx_ep *mEp = &_udc->ci13xxx_ep[n];
 
-	/* Flush ep0 even when queue is empty */
-	if (_udc->skip_flush || (num && list_empty(&mEp->qh.queue)))
+	if (_udc->skip_flush || list_empty(&mEp->qh.queue))
 		return 0;
 
 	start = ktime_get();
@@ -1885,7 +1884,6 @@ static int _hardware_enqueue(struct ci13xxx_ep *mEp, struct ci13xxx_req *mReq)
 	for (i = 1; i < 5; i++)
 		mReq->ptr->page[i] =
 			(mReq->req.dma + i * CI13XXX_PAGE_SIZE) & ~TD_RESERVED_MASK;
-	wmb();
 
 	/* Remote Wakeup */
 	if (udc->suspended) {
@@ -2221,7 +2219,7 @@ __acquires(udc->lock)
 	spin_unlock(udc->lock);
 
 	/*stop charging upon reset */
-	if (udc->transceiver)
+	if (udc->transceiver && !udc->vbus_active)
 		usb_phy_set_power(udc->transceiver, 0);
 
 	retval = _gadget_stop_activity(&udc->gadget);
