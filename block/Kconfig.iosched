@@ -105,13 +105,8 @@ choice
 	config DEFAULT_NOOP
 		bool "No-op"
 
-<<<<<<< HEAD
 	config DEFAULT_BFQ
 		bool "BFQ" if IOSCHED_BFQ=y
-=======
-    config DEFAULT_SIO
-        bool "SIO" if IOSCHED_SIO=y
->>>>>>> b72435f... block: update to BFQ v6
 
 endchoice
 
@@ -119,13 +114,7 @@ config DEFAULT_IOSCHED
 	string
 	default "deadline" if DEFAULT_DEADLINE
 	default "cfq" if DEFAULT_CFQ
-<<<<<<< HEAD
 	default "noop" if DEFAULT_NOOP
-=======
-	default "bfq" if DEFAULT_BFQ
-	default "noop" if DEFAULT_NOOP
-    default "sio" if DEFAULT_SIO
->>>>>>> b72435f... block: update to BFQ v6
 
 endmenu
 

@@ -1523,16 +1523,11 @@ static void cfq_add_rq_rb(struct request *rq)
 {
 	struct cfq_queue *cfqq = RQ_CFQQ(rq);
 	struct cfq_data *cfqd = cfqq->cfqd;
-	struct request *__alias, *prev;
+	struct request *prev;
 
 	cfqq->queued[rq_is_sync(rq)]++;
 
-	/*
-	 * looks a little odd, but the first insert might return an alias.
-	 * if that happens, put the alias on the dispatch list
-	 */
-	while ((__alias = elv_rb_add(&cfqq->sort_list, rq)) != NULL)
-		cfq_dispatch_insert(cfqd->queue, __alias);
+	elv_rb_add(&cfqq->sort_list, rq);
 
 	if (!cfq_cfqq_on_rr(cfqq))
 		cfq_add_cfqq_rr(cfqd, cfqq);
@@ -2967,61 +2962,6 @@ cfq_update_io_thinktime(struct cfq_data *cfqd, struct cfq_queue *cfqq,
 		__cfq_update_io_thinktime(&cfqq->service_tree->ttime,
 			cfqd->cfq_slice_idle);
 	}
-<<<<<<< HEAD
-=======
-
-	if (ret && ret != -EEXIST)
-		printk(KERN_ERR "cfq: cic link failed!\n");
-
-	return ret;
-}
-
-/*
- * Setup general io context and cfq io context. There can be several cfq
- * io contexts per general io context, if this process is doing io to more
- * than one device managed by cfq.
- */
-static struct cfq_io_context *
-cfq_get_io_context(struct cfq_data *cfqd, gfp_t gfp_mask)
-{
-	struct io_context *ioc = NULL;
-	struct cfq_io_context *cic;
-	int ret;
-
-	might_sleep_if(gfp_mask & __GFP_WAIT);
-
-	ioc = get_io_context(gfp_mask, cfqd->queue->node);
-	if (!ioc)
-		return NULL;
-
-retry:
-	cic = cfq_cic_lookup(cfqd, ioc);
-	if (cic)
-		goto out;
-
-	cic = cfq_alloc_io_context(cfqd, gfp_mask);
-	if (cic == NULL)
-		goto err;
-
-	ret = cfq_cic_link(cfqd, ioc, cic, gfp_mask);
-	if (ret == -EEXIST) {
-		/* someone has linked cic to ioc already */
-		cfq_cic_free(cic);
-		goto retry;
-	} else if (ret)
-		goto err_free;
-
-out:
-	/*
-	 * test_and_clear_bit() implies a memory barrier, paired with
-	 * the wmb() in fs/ioprio.c, so the value seen for ioprio is the
-	 * new one.
-	 */
-	if (unlikely(test_and_clear_bit(IOC_CFQ_IOPRIO_CHANGED,
-					ioc->ioprio_changed)))
-		cfq_ioc_set_ioprio(ioc);
-
->>>>>>> b72435f... block: update to BFQ v6
 #ifdef CONFIG_CFQ_GROUP_IOSCHED
 	__cfq_update_io_thinktime(&cfqq->cfqg->ttime, cfqd->cfq_group_idle);
 #endif

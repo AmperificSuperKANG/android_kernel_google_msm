@@ -5,34 +5,10 @@
 #include <linux/rcupdate.h>
 #include <linux/workqueue.h>
 
-<<<<<<< HEAD
 enum {
 	ICQ_IOPRIO_CHANGED	= 1 << 0,
 	ICQ_CGROUP_CHANGED	= 1 << 1,
 	ICQ_EXITED		= 1 << 2,
-=======
-struct cfq_io_context {
-	void *key;
-
-	void *cfqq[2];
-
-	struct io_context *ioc;
-
-	unsigned long last_end_request;
-
-	unsigned long ttime_total;
-	unsigned long ttime_samples;
-	unsigned long ttime_mean;
-
-	unsigned int raising_time_left;
-	unsigned int saved_idle_window;
-
-	struct list_head queue_list;
-	struct hlist_node cic_list;
-
-	void (*dtor)(struct io_context *); /* destructor */
-	void (*exit)(struct io_context *); /* called on task exit */
->>>>>>> b72435f... block: update to BFQ v6
 
 	ICQ_CHANGED_MASK	= ICQ_IOPRIO_CHANGED | ICQ_CGROUP_CHANGED,
 };
