@@ -111,19 +111,14 @@ choice
 
 	config DEFAULT_SIO
                 bool "SIO" if IOSCHED_SIO=y
+	config DEFAULT_SIOPLUS
+		bool "SIOPLUS" if IOSCHED_SIOPLUS=y
 
 	config DEFAULT_NOOP
 		bool "No-op"
 
-<<<<<<< HEAD
 	config DEFAULT_BFQ
 		bool "BFQ" if IOSCHED_BFQ=y
-=======
-    config DEFAULT_SIO
-        bool "SIO" if IOSCHED_SIO=y
-    config DEFAULT_SIOPLUS
-		bool "SIOPLUS" if IOSCHED_SIOPLUS=y
->>>>>>> 15cd9f2... add SIOplus i/o scheduler
 
 endchoice
 
@@ -131,16 +126,10 @@ config DEFAULT_IOSCHED
 	string
 	default "deadline" if DEFAULT_DEADLINE
 	default "cfq" if DEFAULT_CFQ
-<<<<<<< HEAD
 	default "noop" if DEFAULT_NOOP
-
-=======
-    default "bfq" if DEFAULT_BFQ
 	default "bfq" if DEFAULT_BFQ
-	default "noop" if DEFAULT_NOOP
-    default "sio" if DEFAULT_SIO
-    default "sioplus" if DEFAULT_SIOPLUS
->>>>>>> 15cd9f2... add SIOplus i/o scheduler
+	default "sio" if DEFAULT_SIO
+	default "sioplus" if DEFAULT_SIOPLUS
 endmenu
 
 endif
