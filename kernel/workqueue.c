@@ -3352,7 +3352,7 @@ EXPORT_SYMBOL_GPL(work_busy);
 	__ret1 < 0 ? -1 : 0;						\
 })
 
-static int trustee_thread(void *__gcwq)
+static int __cpuinit trustee_thread(void *__gcwq)
 {
 	struct global_cwq *gcwq = __gcwq;
 	struct worker *worker;
@@ -3521,7 +3521,7 @@ static int trustee_thread(void *__gcwq)
  * spin_lock_irq(gcwq->lock) which may be released and regrabbed
  * multiple times.  To be used by cpu_callback.
  */
-static void wait_trustee_state(struct global_cwq *gcwq, int state)
+static void __cpuinit wait_trustee_state(struct global_cwq *gcwq, int state)
 __releases(&gcwq->lock)
 __acquires(&gcwq->lock)
 {
@@ -3535,7 +3535,7 @@ __acquires(&gcwq->lock)
 	}
 }
 
-static int workqueue_cpu_callback(struct notifier_block *nfb,
+static int __devinit workqueue_cpu_callback(struct notifier_block *nfb,
 						unsigned long action,
 						void *hcpu)
 {
@@ -3633,17 +3633,17 @@ static int workqueue_cpu_callback(struct notifier_block *nfb,
  * This will be registered high priority CPU notifier.
  */
 static int __devinit workqueue_cpu_up_callback(struct notifier_block *nfb,
-					       unsigned long action,
-					       void *hcpu)
+                unsigned long action,
+                void *hcpu)
 {
-	switch (action & ~CPU_TASKS_FROZEN) {
-	case CPU_UP_PREPARE:
-	case CPU_UP_CANCELED:
-	case CPU_DOWN_FAILED:
-	case CPU_ONLINE:
-		return workqueue_cpu_callback(nfb, action, hcpu);
-	}
-	return NOTIFY_OK;
+  switch (action & ~CPU_TASKS_FROZEN) {
+  case CPU_UP_PREPARE:
+  case CPU_UP_CANCELED:
+  case CPU_DOWN_FAILED:
+  case CPU_ONLINE:
+    return workqueue_cpu_callback(nfb, action, hcpu);
+  }
+  return NOTIFY_OK;
 }
 
 /*
@@ -3651,22 +3651,22 @@ static int __devinit workqueue_cpu_up_callback(struct notifier_block *nfb,
  * This will be registered as low priority CPU notifier.
  */
 static int __devinit workqueue_cpu_down_callback(struct notifier_block *nfb,
-						 unsigned long action,
-						 void *hcpu)
+            unsigned long action,
+            void *hcpu)
 {
-	switch (action & ~CPU_TASKS_FROZEN) {
-	case CPU_DOWN_PREPARE:
-	case CPU_DYING:
-	case CPU_POST_DEAD:
-		return workqueue_cpu_callback(nfb, action, hcpu);
-	}
-	return NOTIFY_OK;
+  switch (action & ~CPU_TASKS_FROZEN) {
+  case CPU_DOWN_PREPARE:
+  case CPU_DYING:
+  case CPU_POST_DEAD:
+    return workqueue_cpu_callback(nfb, action, hcpu);
+  }
+  return NOTIFY_OK;
 }
 
 #ifdef CONFIG_SMP
 
 struct work_for_cpu {
-	struct work_struct work;
+  struct work_struct work;
 	long (*fn)(void *);
 	void *arg;
 	long ret;
@@ -3674,8 +3674,7 @@ struct work_for_cpu {
 
 static void work_for_cpu_fn(struct work_struct *work)
 {
-	struct work_for_cpu *wfc = container_of(work, struct work_for_cpu, work);
-
+  struct work_for_cpu *wfc = container_of(work, struct work_for_cpu, work);
 	wfc->ret = wfc->fn(wfc->arg);
 }
 
@@ -3732,7 +3731,12 @@ void freeze_workqueues_begin(void)
 		gcwq->flags |= GCWQ_FREEZING;
 
 		list_for_each_entry(wq, &workqueues, list) {
-			struct cpu_workqueue_struct *cwq = get_cwq(cpu, wq);
+
+		struct cpu_workqueue_struct *cwq;
+		if (cpu < CONFIG_NR_CPUS)
+			cwq = get_cwq(cpu, wq);
+		else
+			continue; 
 
 			if (cwq && wq->flags & WQ_FREEZABLE)
 				cwq->max_active = 0;
@@ -3773,7 +3777,12 @@ bool freeze_workqueues_busy(void)
 		 * to peek without lock.
 		 */
 		list_for_each_entry(wq, &workqueues, list) {
-			struct cpu_workqueue_struct *cwq = get_cwq(cpu, wq);
+
+			struct cpu_workqueue_struct *cwq;
+			if (cpu < CONFIG_NR_CPUS)
+				cwq = get_cwq(cpu, wq);
+			else
+				continue; 
 
 			if (!cwq || !(wq->flags & WQ_FREEZABLE))
 				continue;

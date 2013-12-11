@@ -83,6 +83,7 @@
 
 #include "sched.h"
 #include "../workqueue_sched.h"
+#include "../smpboot.h"
 
 #define CREATE_TRACE_POINTS
 #include <trace/events/sched.h>
@@ -1680,10 +1681,8 @@ static void try_to_wake_up_local(struct task_struct *p)
 {
 	struct rq *rq = task_rq(p);
 
-	if (WARN_ON_ONCE(rq != this_rq()) ||
-	    WARN_ON_ONCE(p == current))
-		return;
-
+	BUG_ON(rq != this_rq());
+	BUG_ON(p == current);
 	lockdep_assert_held(&rq->lock);
 
 	if (!raw_spin_trylock(&p->pi_lock)) {
@@ -3711,7 +3710,8 @@ void complete_all(struct completion *x)
 EXPORT_SYMBOL(complete_all);
 
 static inline long __sched
-do_wait_for_common(struct completion *x, long timeout, int state, int iowait)
+do_wait_for_common(struct completion *x,
+		   long (*action)(long), long timeout, int state)
 {
 	if (!x->done) {
 		DECLARE_WAITQUEUE(wait, current);
@@ -3724,10 +3724,7 @@ do_wait_for_common(struct completion *x, long timeout, int state, int iowait)
 			}
 			__set_current_state(state);
 			spin_unlock_irq(&x->wait.lock);
-			if (iowait)
-				timeout = io_schedule_timeout(timeout);
-			else
-				timeout = schedule_timeout(timeout);
+			timeout = action(timeout);
 			spin_lock_irq(&x->wait.lock);
 		} while (!x->done && timeout);
 		__remove_wait_queue(&x->wait, &wait);
@@ -3738,15 +3735,28 @@ do_wait_for_common(struct completion *x, long timeout, int state, int iowait)
 	return timeout ?: 1;
 }
 
-static long __sched
-wait_for_common(struct completion *x, long timeout, int state, int iowait)
+static inline long __sched
+__wait_for_common(struct completion *x,
+		  long (*action)(long), long timeout, int state)
 {
 	might_sleep();
 
 	spin_lock_irq(&x->wait.lock);
-	timeout = do_wait_for_common(x, timeout, state, iowait);
+	timeout = do_wait_for_common(x, action, timeout, state);
 	spin_unlock_irq(&x->wait.lock);
 	return timeout;
+}
+
+static long __sched
+wait_for_common(struct completion *x, long timeout, int state)
+{
+	return __wait_for_common(x, schedule_timeout, timeout, state);
+}
+
+static long __sched
+wait_for_common_io(struct completion *x, long timeout, int state)
+{
+	return __wait_for_common(x, io_schedule_timeout, timeout, state);
 }
 
 /**
@@ -3761,7 +3771,7 @@ wait_for_common(struct completion *x, long timeout, int state, int iowait)
  */
 void __sched wait_for_completion(struct completion *x)
 {
-	wait_for_common(x, MAX_SCHEDULE_TIMEOUT, TASK_UNINTERRUPTIBLE, 0);
+	wait_for_common(x, MAX_SCHEDULE_TIMEOUT, TASK_UNINTERRUPTIBLE);
 }
 EXPORT_SYMBOL(wait_for_completion);
 
@@ -3774,7 +3784,7 @@ EXPORT_SYMBOL(wait_for_completion);
  */
 void __sched wait_for_completion_io(struct completion *x)
 {
-	wait_for_common(x, MAX_SCHEDULE_TIMEOUT, TASK_UNINTERRUPTIBLE, 1);
+	wait_for_common(x, MAX_SCHEDULE_TIMEOUT, TASK_UNINTERRUPTIBLE);
 }
 EXPORT_SYMBOL(wait_for_completion_io);
 
@@ -3794,9 +3804,28 @@ EXPORT_SYMBOL(wait_for_completion_io);
 unsigned long __sched
 wait_for_completion_timeout(struct completion *x, unsigned long timeout)
 {
-	return wait_for_common(x, timeout, TASK_UNINTERRUPTIBLE, 0);
+	return wait_for_common(x, timeout, TASK_UNINTERRUPTIBLE);
 }
 EXPORT_SYMBOL(wait_for_completion_timeout);
+
+/**
+ * wait_for_completion_io_timeout: - waits for completion of a task (w/timeout)
+ * @x:  holds the state of this particular completion
+ * @timeout:  timeout value in jiffies
+ *
+ * This waits for either a completion of a specific task to be signaled or for a
+ * specified timeout to expire. The timeout is in jiffies. It is not
+ * interruptible. The caller is accounted as waiting for IO.
+ *
+ * The return value is 0 if timed out, and positive (at least 1, or number of
+ * jiffies left till timeout) if completed.
+ */
+unsigned long __sched
+wait_for_completion_io_timeout(struct completion *x, unsigned long timeout)
+{
+	return wait_for_common_io(x, timeout, TASK_UNINTERRUPTIBLE);
+}
+EXPORT_SYMBOL(wait_for_completion_io_timeout);
 
 /**
  * wait_for_completion_interruptible: - waits for completion of a task (w/intr)
@@ -3810,7 +3839,7 @@ EXPORT_SYMBOL(wait_for_completion_timeout);
 int __sched wait_for_completion_interruptible(struct completion *x)
 {
 	long t = wait_for_common(x, MAX_SCHEDULE_TIMEOUT,
-				 TASK_INTERRUPTIBLE, 0);
+				 TASK_INTERRUPTIBLE);
 	if (t == -ERESTARTSYS)
 		return t;
 	return 0;
@@ -3832,7 +3861,7 @@ long __sched
 wait_for_completion_interruptible_timeout(struct completion *x,
 					  unsigned long timeout)
 {
-	return wait_for_common(x, timeout, TASK_INTERRUPTIBLE, 0);
+	return wait_for_common(x, timeout, TASK_INTERRUPTIBLE);
 }
 EXPORT_SYMBOL(wait_for_completion_interruptible_timeout);
 
@@ -3847,7 +3876,7 @@ EXPORT_SYMBOL(wait_for_completion_interruptible_timeout);
  */
 int __sched wait_for_completion_killable(struct completion *x)
 {
-	long t = wait_for_common(x, MAX_SCHEDULE_TIMEOUT, TASK_KILLABLE, 0);
+	long t = wait_for_common(x, MAX_SCHEDULE_TIMEOUT, TASK_KILLABLE);
 	if (t == -ERESTARTSYS)
 		return t;
 	return 0;
@@ -3870,7 +3899,7 @@ long __sched
 wait_for_completion_killable_timeout(struct completion *x,
 				     unsigned long timeout)
 {
-	return wait_for_common(x, timeout, TASK_KILLABLE, 0);
+	return wait_for_common(x, timeout, TASK_KILLABLE);
 }
 EXPORT_SYMBOL(wait_for_completion_killable_timeout);
 
@@ -5077,7 +5106,7 @@ void show_state_filter(unsigned long state_filter)
 		debug_show_all_locks();
 }
 
-void init_idle_bootup_task(struct task_struct *idle)
+void __cpuinit init_idle_bootup_task(struct task_struct *idle)
 {
 	idle->sched_class = &idle_sched_class;
 }
@@ -5090,7 +5119,7 @@ void init_idle_bootup_task(struct task_struct *idle)
  * NOTE: this function does not set the idle thread's NEED_RESCHED
  * flag, to make booting more robust.
  */
-void init_idle(struct task_struct *idle, int cpu)
+void __cpuinit init_idle(struct task_struct *idle, int cpu)
 {
 	struct rq *rq = cpu_rq(cpu);
 	unsigned long flags;
@@ -5580,7 +5609,7 @@ static void set_rq_offline(struct rq *rq)
  * migration_call - callback that gets triggered when a CPU is added.
  * Here we can start up the necessary migration thread for the new CPU.
  */
-static int
+static int __cpuinit
 migration_call(struct notifier_block *nfb, unsigned long action, void *hcpu)
 {
 	int cpu = (long)hcpu;
@@ -5633,12 +5662,12 @@ migration_call(struct notifier_block *nfb, unsigned long action, void *hcpu)
  * happens before everything else.  This has to be lower priority than
  * the notifier in the perf_event subsystem, though.
  */
-static struct notifier_block migration_notifier = {
+static struct notifier_block __cpuinitdata migration_notifier = {
 	.notifier_call = migration_call,
 	.priority = CPU_PRI_MIGRATION,
 };
 
-static int sched_cpu_active(struct notifier_block *nfb,
+static int __cpuinit sched_cpu_active(struct notifier_block *nfb,
 				      unsigned long action, void *hcpu)
 {
 	switch (action & ~CPU_TASKS_FROZEN) {
@@ -5651,7 +5680,7 @@ static int sched_cpu_active(struct notifier_block *nfb,
 	}
 }
 
-static int sched_cpu_inactive(struct notifier_block *nfb,
+static int __cpuinit sched_cpu_inactive(struct notifier_block *nfb,
 					unsigned long action, void *hcpu)
 {
 	switch (action & ~CPU_TASKS_FROZEN) {
@@ -6017,18 +6046,23 @@ static void destroy_sched_domains(struct sched_domain *sd, int cpu)
  * two cpus are in the same cache domain, see cpus_share_cache().
  */
 DEFINE_PER_CPU(struct sched_domain *, sd_llc);
+DEFINE_PER_CPU(int, sd_llc_size);
 DEFINE_PER_CPU(int, sd_llc_id);
 
 static void update_top_cache_domain(int cpu)
 {
 	struct sched_domain *sd;
 	int id = cpu;
+	int size = 1;
 
 	sd = highest_flag_domain(cpu, SD_SHARE_PKG_RESOURCES);
-	if (sd)
+	if (sd) {
 		id = cpumask_first(sched_domain_span(sd));
+		size = cpumask_weight(sched_domain_span(sd));
+	}
 
 	rcu_assign_pointer(per_cpu(sd_llc, cpu), sd);
+	per_cpu(sd_llc_size, cpu) = size;
 	per_cpu(sd_llc_id, cpu) = id;
 }
 
@@ -7281,6 +7315,7 @@ void __init sched_init(void)
 	/* May be allocated at isolcpus cmdline parse time */
 	if (cpu_isolated_map == NULL)
 		zalloc_cpumask_var(&cpu_isolated_map, GFP_NOWAIT);
+	idle_thread_set_boot_cpu();
 #endif
 	init_sched_fair_class();
 

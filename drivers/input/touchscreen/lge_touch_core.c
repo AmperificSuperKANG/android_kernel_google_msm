@@ -31,12 +31,12 @@
 #include <linux/version.h>
 #include <linux/atomic.h>
 #include <linux/gpio.h>
+#include <linux/cpufreq.h>
+#include <linux/hotplug.h>
+#include <linux/cpu.h>
+#include <linux/syscalls.h>
 
 #include <linux/input/lge_touch_core.h>
-
-#ifdef CONFIG_TOUCH_WAKE
-#include <linux/touch_wake.h>
-#endif
 
 struct touch_device_driver*     touch_device_func;
 struct workqueue_struct*        touch_wq;
@@ -48,14 +48,17 @@ struct lge_touch_attribute {
 				const char *buf, size_t count);
 };
 
-#ifdef CONFIG_TOUCH_WAKE
-static struct lge_touch_data *touchwake_data;
-static unsigned suspending = 0;
-#endif
-
 static int is_pressure;
 static int is_width_major;
 static int is_width_minor;
+
+/* extern vars */
+struct lge_touch_data *_ts;
+
+bool suspended = false;
+
+bool doubletap_to_wake = false;
+module_param(doubletap_to_wake, bool, 0664);
 
 #define LGE_TOUCH_ATTR(_name, _mode, _show, _store)               \
 	struct lge_touch_attribute lge_touch_attr_##_name =       \
@@ -801,6 +804,49 @@ static void touch_input_report(struct lge_touch_data *ts)
 	input_sync(ts->input_dev);
 }
 
+static struct double_tap_to_wake {
+	unsigned long touch_time;
+	unsigned long window_time;
+	unsigned long sample_time_ms;
+	unsigned int touches;
+	struct input_dev *input_device;
+} wake = {
+	.touch_time = 0,
+	.window_time = 0,
+	.sample_time_ms = 100,
+	.touches = 0,
+};
+
+void wake_up_display(struct input_dev *input_dev)
+{
+	wake.input_device = input_dev;
+	return;
+}
+
+#define BOOSTPULSE "/sys/devices/system/cpu/cpufreq/interactive/boostpulse"
+
+static struct boost_mako {
+	int boostpulse_fd;
+} boost = {
+	.boostpulse_fd = -1,
+};
+
+static int boostpulse_open(void)
+{
+	if (boost.boostpulse_fd < 0)
+	{
+		boost.boostpulse_fd = sys_open(BOOSTPULSE, O_WRONLY, 0);
+		
+		if (boost.boostpulse_fd < 0)
+		{
+			pr_info("Error opening %s\n", BOOSTPULSE);
+			return -1;		
+		}
+	}
+
+	return boost.boostpulse_fd;
+}
+
 /*
  * Touch work function
  */
@@ -811,6 +857,49 @@ static void touch_work_func(struct work_struct *work)
 	int int_pin = 0;
 	int next_work = 0;
 	int ret;
+	int len;
+
+	if (boostpulse_open() >= 0)
+	{
+		len = sys_write(boost.boostpulse_fd, "1", sizeof(BOOSTPULSE));
+			
+		if (len < 0)
+		{
+			pr_info("Error writing to %s\n", BOOSTPULSE);			
+		}
+	}
+
+	if (suspended && doubletap_to_wake)
+	{
+		if (!(wake.touch_time + 2000 >= ktime_to_ms(ktime_get())))
+		{
+			wake.touch_time = ktime_to_ms(ktime_get());
+			wake.touches = 0;
+		}
+			
+		if (!time_is_after_jiffies(
+			wake.window_time + msecs_to_jiffies(wake.sample_time_ms)))
+		{
+			/*
+			 * Don't count as touch when we release the touch input
+			 */
+			if (ts->ts_data.curr_data[0].state != ABS_RELEASE)
+				++wake.touches;
+
+			if (wake.touches == 2)
+			{
+				input_event(wake.input_device, EV_KEY, KEY_POWER, 1);
+				input_event(wake.input_device, EV_SYN, 0, 0);
+				msleep(100);
+				input_event(wake.input_device, EV_KEY, KEY_POWER, 0);
+				input_event(wake.input_device, EV_SYN, 0, 0);
+
+				input_sync(wake.input_device);	
+			}
+		}
+
+		wake.window_time = jiffies;
+	} 
 
 	atomic_dec(&ts->next_work);
 	ts->ts_data.total_num = 0;
@@ -837,22 +926,14 @@ static void touch_work_func(struct work_struct *work)
 	if (likely(ts->pdata->role->operation_mode == INTERRUPT_MODE))
 		int_pin = gpio_get_value(ts->pdata->int_pin);
 
-#ifdef CONFIG_TOUCH_WAKE
-	if (unlikely(!suspending && device_is_suspended()) &&
-					touchwake_is_enabled()) {
-		touch_press();
-		goto out;
-	}
-#endif
-
 	/* Accuracy Solution */
-	if (unlikely(ts->pdata->role->accuracy_filter_enable)) {
+	if (likely(ts->pdata->role->accuracy_filter_enable)) {
 		if (accuracy_filter_func(ts) < 0)
 			goto out;
 	}
 
 	/* Jitter Solution */
-	if (unlikely(ts->pdata->role->jitter_filter_enable)) {
+	if (likely(ts->pdata->role->jitter_filter_enable)) {
 		if (jitter_filter_func(ts) < 0)
 			goto out;
 	}
@@ -1481,25 +1562,6 @@ static ssize_t ic_register_ctrl(struct lge_touch_data *ts,
 	return count;
 }
 
-/* show_jitter_solution
- *
- * show jitter parameters
- */
-
-static ssize_t show_jitter_solution(struct lge_touch_data *ts, char *buf)
-{
-	int ret = 0;
-
-	ret = sprintf(buf, "%d %d\n",
-				ts->pdata->role->jitter_filter_enable,
-				ts->jitter_filter.adjust_margin);
-	return ret;
-}
- 
- /* store_jitter_solution
- *
- * store jitter parameters
- */
 static ssize_t store_jitter_solution(struct lge_touch_data *ts,
 						const char *buf, size_t count)
 {
@@ -1513,29 +1575,6 @@ static ssize_t store_jitter_solution(struct lge_touch_data *ts,
 	return count;
 }
 
-/* show_accuracy_solution
- *
- * show accuracy filter parameters
- */
-static ssize_t show_accuracy_solution(struct lge_touch_data *ts, char *buf)
-{
-	int ret = 0;
-
-	ret = sprintf(buf, "%d %d %d %d %d %d %d\n",
-				ts->pdata->role->accuracy_filter_enable,
-				ts->accuracy_filter.ignore_pressure_gap,
-				ts->accuracy_filter.delta_max,
-				ts->accuracy_filter.touch_max_count,
-				ts->accuracy_filter.max_pressure,
-				ts->accuracy_filter.direction_count,
-				ts->accuracy_filter.time_to_max_pressure);
-	return ret;
-}
-
-/* store_accuracy_solution
- *
- * store accuracy filter parameters
- */
 static ssize_t store_accuracy_solution(struct lge_touch_data *ts, const char *buf, size_t count)
 {
 	int ret = 0;
@@ -1622,10 +1661,8 @@ static LGE_TOUCH_ATTR(firmware, S_IRUGO | S_IWUSR, show_fw_info, store_fw_upgrad
 static LGE_TOUCH_ATTR(fw_ver, S_IRUGO | S_IWUSR, show_fw_ver, NULL);
 static LGE_TOUCH_ATTR(reset, S_IRUGO | S_IWUSR, NULL, store_ts_reset);
 static LGE_TOUCH_ATTR(ic_rw, S_IRUGO | S_IWUSR, NULL, ic_register_ctrl);
-static LGE_TOUCH_ATTR(jitter, S_IRUGO | S_IWUSR, show_jitter_solution,
-							store_jitter_solution);
-static LGE_TOUCH_ATTR(accuracy, S_IRUGO | S_IWUSR, show_accuracy_solution,
-						store_accuracy_solution);
+static LGE_TOUCH_ATTR(jitter, S_IRUGO | S_IWUSR, NULL, store_jitter_solution);
+static LGE_TOUCH_ATTR(accuracy, S_IRUGO | S_IWUSR, NULL, store_accuracy_solution);
 static LGE_TOUCH_ATTR(show_touches, S_IRUGO | S_IWUSR, show_show_touches, store_show_touches);
 static LGE_TOUCH_ATTR(pointer_location, S_IRUGO | S_IWUSR, show_pointer_location,
 					store_pointer_location);
@@ -1944,25 +1981,25 @@ static int touch_probe(struct i2c_client *client,
 	}
 
 	/* jitter solution */
-	ts->jitter_filter.adjust_margin = 100;
+	if (ts->pdata->role->jitter_filter_enable) {
+		ts->jitter_filter.adjust_margin = 100;
+	}
 
 	/* accuracy solution */
-	ts->accuracy_filter.ignore_pressure_gap = 5;
-	ts->accuracy_filter.delta_max = 100;
-	ts->accuracy_filter.max_pressure = 255;
-	ts->accuracy_filter.time_to_max_pressure = one_sec / 20;
-	ts->accuracy_filter.direction_count = one_sec / 6;
-	ts->accuracy_filter.touch_max_count = one_sec / 2;
+	if (ts->pdata->role->accuracy_filter_enable) {
+		ts->accuracy_filter.ignore_pressure_gap = 5;
+		ts->accuracy_filter.delta_max = 100;
+		ts->accuracy_filter.max_pressure = 255;
+		ts->accuracy_filter.time_to_max_pressure = one_sec / 20;
+		ts->accuracy_filter.direction_count = one_sec / 6;
+		ts->accuracy_filter.touch_max_count = one_sec / 2;
+	}
 
 #if defined(CONFIG_HAS_EARLYSUSPEND)
 	ts->early_suspend.level = EARLY_SUSPEND_LEVEL_BLANK_SCREEN + 1;
 	ts->early_suspend.suspend = touch_early_suspend;
 	ts->early_suspend.resume = touch_late_resume;
 	register_early_suspend(&ts->early_suspend);
-#endif
-
-#ifdef CONFIG_TOUCH_WAKE
-	touchwake_data = ts;
 #endif
 
 	/* Register sysfs for making fixed communication path to framework layer */
@@ -1992,6 +2029,8 @@ static int touch_probe(struct i2c_client *client,
 #ifdef CONFIG_TOUCHSCREEN_CHARGER_NOTIFY
 	touch_psy_init(ts);
 #endif
+
+	_ts = ts;
 
 	return 0;
 
@@ -2054,38 +2093,13 @@ static int touch_remove(struct i2c_client *client)
 	return 0;
 }
 
-static void touch_power_on(struct lge_touch_data *ts)
+#if defined(CONFIG_HAS_EARLYSUSPEND)
+static void touch_early_suspend(struct early_suspend *h)
 {
-	if (unlikely(touch_debug_mask & DEBUG_TRACE))
-		TOUCH_DEBUG_MSG("\n");
+	struct lge_touch_data *ts =
+			container_of(h, struct lge_touch_data, early_suspend);
 
-	ts->curr_resume_state = 1;
-
-	if (ts->fw_upgrade.is_downloading == UNDER_DOWNLOADING) {
-		TOUCH_INFO_MSG("late_resume is not executed\n");
-		return;
-	}
-
-	touch_power_cntl(ts, ts->pdata->role->resume_pwr);
-
-	if (ts->pdata->role->operation_mode == INTERRUPT_MODE)
-		enable_irq(ts->client->irq);
-	else
-		hrtimer_start(&ts->timer,
-			ktime_set(0, ts->pdata->role->report_period),
-					HRTIMER_MODE_REL);
-
-	if (ts->pdata->role->resume_pwr == POWER_ON)
-		queue_delayed_work(touch_wq, &ts->work_init,
-			msecs_to_jiffies(ts->pdata->role->booting_delay));
-	else
-		queue_delayed_work(touch_wq, &ts->work_init, 0);
-}
-
-static void touch_power_off(struct lge_touch_data *ts)
-{
-	if (unlikely(touch_debug_mask & DEBUG_TRACE))
-		TOUCH_DEBUG_MSG("\n");
+	suspended = true;
 
 	ts->curr_resume_state = 0;
 
@@ -2094,33 +2108,27 @@ static void touch_power_off(struct lge_touch_data *ts)
 		return;
 	}
 
-	if (ts->pdata->role->operation_mode == INTERRUPT_MODE)
-		disable_irq(ts->client->irq);
-	else
-		hrtimer_cancel(&ts->timer);
+	if (doubletap_to_wake)
+	{
+		enable_irq_wake(ts->client->irq);
+	}
+	else 
+	{
+		if (ts->pdata->role->operation_mode == INTERRUPT_MODE)
+                disable_irq(ts->client->irq);
+        else
+                hrtimer_cancel(&ts->timer);
 
-	cancel_work_sync(&ts->work);
-	cancel_delayed_work_sync(&ts->work_init);
-	if (ts->pdata->role->key_type == TOUCH_HARD_KEY)
-		cancel_delayed_work_sync(&ts->work_touch_lock);
+        cancel_work_sync(&ts->work);
+        cancel_delayed_work_sync(&ts->work_init);
+        if (ts->pdata->role->key_type == TOUCH_HARD_KEY)
+                cancel_delayed_work_sync(&ts->work_touch_lock);
 
-	release_all_ts_event(ts);
+        release_all_ts_event(ts);
 
-	touch_power_cntl(ts, ts->pdata->role->suspend_pwr);
-}
+        touch_power_cntl(ts, ts->pdata->role->suspend_pwr);
 
-#if defined(CONFIG_HAS_EARLYSUSPEND)
-static void touch_early_suspend(struct early_suspend *h)
-{
-	struct lge_touch_data *ts =
-			container_of(h, struct lge_touch_data, early_suspend);
-
-#ifdef CONFIG_TOUCH_WAKE
-	if (touchwake_is_enabled())
-		return;	/* touchwake will handle touchscreen suspend call */
-#endif
-	/* touchwake is not compiled or it's disabled - handle suspend */
-	touch_power_off(ts);
+	}
 }
 
 static void touch_late_resume(struct early_suspend *h)
@@ -2128,29 +2136,37 @@ static void touch_late_resume(struct early_suspend *h)
 	struct lge_touch_data *ts =
 			container_of(h, struct lge_touch_data, early_suspend);
 
-#ifdef CONFIG_TOUCH_WAKE
-	if (touchwake_is_enabled())
+	suspended = false;
+
+	ts->curr_resume_state = 1;
+
+	if (ts->fw_upgrade.is_downloading == UNDER_DOWNLOADING) {
+		TOUCH_INFO_MSG("late_resume is not executed\n");
 		return;
-#endif
-	/* touchwake is not compiled or it's disabled - handle wake */
-	touch_power_on(ts);
-}
-#endif
+	}
 
-#ifdef CONFIG_TOUCH_WAKE
-void touchscreen_disable(void)
-{
-	suspending = 1;
-	touch_power_off(touchwake_data);
-	suspending = 0;
-}
-EXPORT_SYMBOL(touchscreen_disable);
+	if (doubletap_to_wake)
+	{
+		disable_irq_wake(ts->client->irq);
+	}
+	else
+	{
+		touch_power_cntl(ts, ts->pdata->role->resume_pwr);
 
-void touchscreen_enable(void)
-{
-	touch_power_on(touchwake_data);
+        if (ts->pdata->role->operation_mode == INTERRUPT_MODE)
+                enable_irq(ts->client->irq);
+        else
+                hrtimer_start(&ts->timer,
+                        ktime_set(0, ts->pdata->role->report_period),
+                                        HRTIMER_MODE_REL);
+
+        if (ts->pdata->role->resume_pwr == POWER_ON)
+                queue_delayed_work(touch_wq, &ts->work_init,
+                        msecs_to_jiffies(ts->pdata->role->booting_delay));
+        else
+                queue_delayed_work(touch_wq, &ts->work_init, 0);
+	}
 }
-EXPORT_SYMBOL(touchscreen_enable);
 #endif
 
 #if defined(CONFIG_PM)
@@ -2204,7 +2220,7 @@ int touch_driver_register(struct touch_device_driver* driver)
 
 	touch_device_func = driver;
 
-	touch_wq = create_singlethread_workqueue("touch_wq");
+	touch_wq = alloc_workqueue("touch_wq", 0, 1);
 	if (!touch_wq) {
 		TOUCH_ERR_MSG("CANNOT create new workqueue\n");
 		ret = -ENOMEM;

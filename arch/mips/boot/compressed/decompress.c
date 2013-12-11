@@ -43,9 +43,6 @@ void error(char *x)
 /* activate the code for pre-boot environment */
 #define STATIC static
 
-#if defined(CONFIG_KERNEL_GZIP) || defined(CONFIG_KERNEL_XZ) || \
-	defined(CONFIG_KERNEL_LZ4)
-
 #ifdef CONFIG_KERNEL_GZIP
 void *memcpy(void *dest, const void *src, size_t n)
 {
@@ -71,10 +68,6 @@ void *memset(void *s, int c, size_t n)
 	return s;
 }
 #include "../../../../lib/decompress_bunzip2.c"
-#endif
-
-#ifdef CONFIG_KERNEL_LZ4
-#include "../../../../lib/decompress_unlz4.c"
 #endif
 
 #ifdef CONFIG_KERNEL_LZMA

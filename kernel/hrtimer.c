@@ -646,17 +646,29 @@ static inline void hrtimer_init_hres(struct hrtimer_cpu_base *base)
  * and expiry check is done in the hrtimer_interrupt or in the softirq.
  */
 static inline int hrtimer_enqueue_reprogram(struct hrtimer *timer,
-					    struct hrtimer_clock_base *base)
+					    struct hrtimer_clock_base *base,
+					    int wakeup)
 {
-	return base->cpu_base->hres_active && hrtimer_reprogram(timer, base);
+	if (base->cpu_base->hres_active && hrtimer_reprogram(timer, base)) {
+		if (wakeup) {
+			raw_spin_unlock(&base->cpu_base->lock);
+			raise_softirq_irqoff(HRTIMER_SOFTIRQ);
+			raw_spin_lock(&base->cpu_base->lock);
+		} else
+			__raise_softirq_irqoff(HRTIMER_SOFTIRQ);
+
+		return 1;
+	}
+
+	return 0;
 }
 
 static inline ktime_t hrtimer_update_base(struct hrtimer_cpu_base *base)
 {
-	ktime_t *offs_real = &base->clock_base[HRTIMER_BASE_REALTIME].offset;
-	ktime_t *offs_boot = &base->clock_base[HRTIMER_BASE_BOOTTIME].offset;
+  ktime_t *offs_real = &base->clock_base[HRTIMER_BASE_REALTIME].offset;
+  ktime_t *offs_boot = &base->clock_base[HRTIMER_BASE_BOOTTIME].offset;
 
-	return ktime_get_update_offsets(offs_real, offs_boot);
+  return ktime_get_update_offsets(offs_real, offs_boot);
 }
 
 /*
@@ -732,7 +744,8 @@ static inline int hrtimer_switch_to_hres(void) { return 0; }
 static inline void
 hrtimer_force_reprogram(struct hrtimer_cpu_base *base, int skip_equal) { }
 static inline int hrtimer_enqueue_reprogram(struct hrtimer *timer,
-					    struct hrtimer_clock_base *base)
+					    struct hrtimer_clock_base *base,
+					    int wakeup)
 {
 	return 0;
 }
@@ -993,21 +1006,8 @@ int __hrtimer_start_range_ns(struct hrtimer *timer, ktime_t tim,
 	 *
 	 * XXX send_remote_softirq() ?
 	 */
-	if (leftmost && new_base->cpu_base == &__get_cpu_var(hrtimer_bases)
-		&& hrtimer_enqueue_reprogram(timer, new_base)) {
-		if (wakeup) {
-			/*
-			 * We need to drop cpu_base->lock to avoid a
-			 * lock ordering issue vs. rq->lock.
-			 */
-			raw_spin_unlock(&new_base->cpu_base->lock);
-			raise_softirq_irqoff(HRTIMER_SOFTIRQ);
-			local_irq_restore(flags);
-			return ret;
-		} else {
-			__raise_softirq_irqoff(HRTIMER_SOFTIRQ);
-		}
-	}
+	if (leftmost && new_base->cpu_base == &__get_cpu_var(hrtimer_bases))
+		hrtimer_enqueue_reprogram(timer, new_base, wakeup);
 
 	unlock_hrtimer_base(timer, &flags);
 
@@ -1641,7 +1641,7 @@ SYSCALL_DEFINE2(nanosleep, struct timespec __user *, rqtp,
 /*
  * Functions related to boot-time initialization:
  */
-static void init_hrtimers_cpu(int cpu)
+static void __cpuinit init_hrtimers_cpu(int cpu)
 {
 	struct hrtimer_cpu_base *cpu_base = &per_cpu(hrtimer_bases, cpu);
 	int i;
@@ -1722,7 +1722,7 @@ static void migrate_hrtimers(int scpu)
 
 #endif /* CONFIG_HOTPLUG_CPU */
 
-static int hrtimer_cpu_notify(struct notifier_block *self,
+static int __cpuinit hrtimer_cpu_notify(struct notifier_block *self,
 					unsigned long action, void *hcpu)
 {
 	int scpu = (long)hcpu;
@@ -1755,7 +1755,7 @@ static int hrtimer_cpu_notify(struct notifier_block *self,
 	return NOTIFY_OK;
 }
 
-static struct notifier_block hrtimers_nb = {
+static struct notifier_block __cpuinitdata hrtimers_nb = {
 	.notifier_call = hrtimer_cpu_notify,
 };
 

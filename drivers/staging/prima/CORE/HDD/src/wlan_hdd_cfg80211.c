@@ -8183,3 +8183,4 @@ static struct cfg80211_ops wlan_hdd_cfg80211_ops =
      .suspend = wlan_hdd_cfg80211_suspend_wlan,
      .set_mac_acl = wlan_hdd_cfg80211_set_mac_acl,
 };
+

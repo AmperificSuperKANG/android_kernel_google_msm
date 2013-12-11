@@ -142,8 +142,6 @@ extern unsigned long nr_iowait(void);
 extern unsigned long nr_iowait_cpu(int cpu);
 extern unsigned long this_cpu_load(void);
 
-extern void sched_update_nr_prod(int cpu, unsigned long nr, bool inc);
-extern void sched_get_nr_running_avg(int *avg, int *iowait_avg);
 
 extern void calc_global_load(unsigned long ticks);
 
@@ -1277,6 +1275,9 @@ struct task_struct {
 #ifdef CONFIG_SMP
 	struct llist_node wake_entry;
 	int on_cpu;
+	struct task_struct *last_wakee;
+	unsigned long wakee_flips;
+	unsigned long wakee_flip_decay_ts;
 #endif
 	int on_rq;
 
@@ -1843,7 +1844,6 @@ extern int task_free_unregister(struct notifier_block *n);
 #define PF_MEMPOLICY	0x10000000	/* Non-default NUMA mempolicy */
 #define PF_MUTEX_TESTER	0x20000000	/* Thread belongs to the rt mutex tester */
 #define PF_FREEZER_SKIP	0x40000000	/* Freezer should not count it as freezable */
-#define PF_SUSPEND_TASK 0x80000000      /* this thread called freeze_processes and should not be frozen */
 
 /*
  * Only the _current_ task can read/write to tsk->flags, but other

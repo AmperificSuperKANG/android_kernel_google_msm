@@ -202,7 +202,7 @@ EXPORT_SYMBOL(local_bh_enable_ip);
  * we want to handle softirqs as soon as possible, but they
  * should not be able to lock up the box.
  */
-#define MAX_SOFTIRQ_TIME  max(1, (2*HZ/1000))
+#define MAX_SOFTIRQ_TIME  msecs_to_jiffies(2)
 
 asmlinkage void __do_softirq(void)
 {
@@ -680,7 +680,7 @@ void send_remote_softirq(struct call_single_data *cp, int cpu, int softirq)
 }
 EXPORT_SYMBOL(send_remote_softirq);
 
-static int remote_softirq_cpu_notify(struct notifier_block *self,
+static int __cpuinit remote_softirq_cpu_notify(struct notifier_block *self,
 					       unsigned long action, void *hcpu)
 {
 	/*
@@ -709,7 +709,7 @@ static int remote_softirq_cpu_notify(struct notifier_block *self,
 	return NOTIFY_OK;
 }
 
-static struct notifier_block remote_softirq_cpu_notifier = {
+static struct notifier_block __cpuinitdata remote_softirq_cpu_notifier = {
 	.notifier_call	= remote_softirq_cpu_notify,
 };
 
@@ -838,7 +838,7 @@ static void takeover_tasklets(unsigned int cpu)
 }
 #endif /* CONFIG_HOTPLUG_CPU */
 
-static int cpu_callback(struct notifier_block *nfb,
+static int __cpuinit cpu_callback(struct notifier_block *nfb,
 				  unsigned long action,
 				  void *hcpu)
 {
@@ -889,7 +889,7 @@ static int cpu_callback(struct notifier_block *nfb,
 	return NOTIFY_OK;
 }
 
-static struct notifier_block cpu_nfb = {
+static struct notifier_block __cpuinitdata cpu_nfb = {
 	.notifier_call = cpu_callback
 };
 
